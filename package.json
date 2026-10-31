@@ -1,0 +1,25 @@
+{
+  "name": "countersign",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "postinstall": "node scripts/copy-pdf-worker.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --test test/flow.test.mjs test/marketing.test.mjs test/security/"
+  },
+  "dependencies": {
+    "lucide-react": "1.66.0",
+    "next": "^16.4.3",
+    "nodemailer": "10.3.1",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.4.299",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

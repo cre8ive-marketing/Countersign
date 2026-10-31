@@ -1,0 +1,378 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+import { useRouter } from 'next/router';
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Send, Check, UserRound } from 'lucide-react';
+import { withUser } from '../../../../lib/auth';
+import { ownedDocument } from '../../../../lib/documents';
+import { apiFetch, FIELD_META, recipientColor } from '../../../../lib/client';
+import { Button } from '../../../../components/ui';
+import PdfPages from '../../../../components/PdfPages';
+
+export const getServerSideProps = withUser(async (ctx, user) => {
+  const { doc, recipients, fields } = ownedDocument(ctx.params.id, user.id);
+  if (doc.status !== 'draft') return { redirect: { destination: `/app/documents/${doc.id}`, permanent: false } };
+  return {
+    props: {
+      user,
+      doc: { id: doc.id, title: doc.title, message: doc.message, sequential: !!doc.sequential, reminderDays: doc.reminder_days, isTemplate: !!doc.is_template },
+      initialRecipients: recipients.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role })),
+      initialFields: fields.map((f) => ({ id: f.id, recipientId: f.recipient_id, type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, required: !!f.required, label: f.label })),
+    },
+  };
+});
+
+const tempId = () => `t${Math.random().toString(36).slice(2, 10)}`;
+const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+export default function Editor({ user, doc, initialRecipients, initialFields }) {
+  const router = useRouter();
+  const [title, setTitle] = useState(doc.title);
+  const [message, setMessage] = useState(doc.message);
+  const [sequential, setSequential] = useState(doc.sequential);
+  const [reminderDays, setReminderDays] = useState(doc.reminderDays);
+  const [recipients, setRecipients] = useState(initialRecipients.length ? initialRecipients
+    : [{ id: tempId(), name: '', email: '', role: 'signer' }]);
+  const [fields, setFields] = useState(initialFields);
+  const [activeId, setActiveId] = useState(recipients.find((r) => r.role === 'signer')?.id);
+  const [placing, setPlacing] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [saveState, setSaveState] = useState('saved');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState(null);
+  const pageSizes = useRef([]);
+
+  const signers = recipients.filter((r) => r.role === 'signer');
+  const colorOf = useCallback((rid) => recipientColor(recipients.findIndex((r) => r.id === rid)), [recipients]);
+  const selected = fields.find((f) => f.id === selectedId);
+  const active = recipients.find((r) => r.id === activeId);
+
+  // Autosave the whole draft shortly after any change.
+  const payload = useMemo(() => ({ title, message, sequential, reminderDays, recipients, fields }), [title, message, sequential, reminderDays, recipients, fields]);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    setSaveState('dirty');
+    const t = setTimeout(() => save(payload), 700);
+    return () => clearTimeout(t);
+  }, [payload]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function save(body) {
+    setSaveState('saving');
+    try {
+      await apiFetch(`/api/documents/${doc.id}`, { method: 'PUT', body });
+      setSaveState('saved');
+    } catch (e) {
+      setSaveState('error');
+      setError(e.message);
+    }
+  }
+
+  async function send() {
+    setError(null);
+    setSending(true);
+    try {
+      await apiFetch(`/api/documents/${doc.id}`, { method: 'PUT', body: payload });
+      if (doc.isTemplate) return router.push('/app?view=templates');
+      await apiFetch(`/api/documents/${doc.id}/send`);
+      router.push(`/app/documents/${doc.id}?sent=1`);
+    } catch (e) {
+      setError(e.message);
+      setSending(false);
+    }
+  }
+
+  async function discard() {
+    if (!confirm(doc.isTemplate ? 'Delete this template?' : 'Delete this draft?')) return;
+    try {
+      await apiFetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
+      router.push(doc.isTemplate ? '/app?view=templates' : '/app');
+    } catch (e) { setError(e.message); }
+  }
+
+  // Recipients
+  const updateRecipient = (id, patch) => setRecipients((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const addRecipient = (r = {}) => {
+    const n = { id: tempId(), name: '', email: '', role: 'signer', ...r };
+    setRecipients((rs) => [...rs, n]);
+    if (n.role === 'signer') setActiveId(n.id);
+  };
+  const removeRecipient = (id) => {
+    setRecipients((rs) => rs.filter((r) => r.id !== id));
+    setFields((fs) => fs.filter((f) => f.recipientId !== id));
+    if (activeId === id) setActiveId(signers.find((s) => s.id !== id)?.id);
+  };
+  const moveRecipient = (i, dir) => setRecipients((rs) => {
+    const next = [...rs];
+    const j = i + dir;
+    if (j < 0 || j >= next.length) return rs;
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+  const hasMe = recipients.some((r) => r.email.toLowerCase() === user.email.toLowerCase());
+
+  // Fields
+  const updateField = (id, patch) => setFields((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  const removeField = (id) => { setFields((fs) => fs.filter((f) => f.id !== id)); setSelectedId(null); };
+
+  function placeAt(page, e, size) {
+    if (!placing || !active) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const meta = FIELD_META[placing];
+    const w = meta.w / size.ptWidth;
+    const h = meta.h / size.ptHeight;
+    const x = clamp01((e.clientX - rect.left) / rect.width - w / 2);
+    const y = clamp01((e.clientY - rect.top) / rect.height - h / 2);
+    const f = { id: tempId(), recipientId: active.id, type: placing, page, x: Math.min(x, 1 - w), y: Math.min(y, 1 - h), w, h, required: placing !== 'checkbox', label: '' };
+    setFields((fs) => [...fs, f]);
+    setSelectedId(f.id);
+    setPlacing(null);
+  }
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') { setPlacing(null); setSelectedId(null); return; }
+      if (!selectedId || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeField(selectedId); }
+      const step = e.shiftKey ? 0.01 : 0.002;
+      const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (d) {
+        e.preventDefault();
+        setFields((fs) => fs.map((f) => (f.id === selectedId ? { ...f, x: clamp01(Math.min(f.x + d[0], 1 - f.w)), y: clamp01(Math.min(f.y + d[1], 1 - f.h)) } : f)));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fieldCount = (rid) => fields.filter((f) => f.recipientId === rid).length;
+  const saveLabel = { saved: 'Saved', saving: 'Saving…', dirty: 'Unsaved changes', error: 'Not saved' }[saveState];
+
+  return (
+    <div className="editor">
+      <Head><title>{`Prepare ${title} · Countersign`}</title></Head>
+      <header className="editor-bar">
+        <Link href={doc.isTemplate ? '/app?view=templates' : '/app'} className="icon-btn" aria-label="Back to documents"><ArrowLeft size={18} strokeWidth={1.75} /></Link>
+        <div className="editor-title">
+          <label htmlFor="doc-title" className="sr-only">Document title</label>
+          <input id="doc-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
+          <span className={`save-state is-${saveState}`}>{saveState === 'saved' && <Check size={13} strokeWidth={2} aria-hidden="true" />}{saveLabel}</span>
+        </div>
+        {doc.isTemplate && <span className="badge badge-neutral">Template</span>}
+        <div className="editor-bar-actions">
+          <Button variant="ghost" onClick={discard} aria-label={doc.isTemplate ? 'Delete template' : 'Delete draft'} title={doc.isTemplate ? 'Delete template' : 'Delete draft'}><Trash2 size={16} strokeWidth={1.75} /></Button>
+          <Button variant="primary" onClick={send} loading={sending}>
+            {doc.isTemplate ? <>Save template</> : <><Send size={15} strokeWidth={1.75} aria-hidden="true" />Send for signature</>}
+          </Button>
+        </div>
+      </header>
+
+      {error && <div className="editor-error" role="alert"><span>{error}</span><button className="link-btn" onClick={() => setError(null)}>Dismiss</button></div>}
+
+      <div className="editor-body">
+        <aside className="editor-rail">
+          <section className="rail-section">
+            <div className="rail-head">
+              <h2>Recipients</h2>
+              <label className="switch">
+                <input type="checkbox" checked={sequential} onChange={(e) => setSequential(e.target.checked)} />
+                <span className="switch-track" aria-hidden="true" />
+                Signing order
+              </label>
+            </div>
+            <ol className="recipients">
+              {recipients.map((r, i) => {
+                const order = recipients.slice(0, i + 1).filter((x) => x.role === 'signer').length;
+                return (
+                  <li key={r.id} className={`recipient${activeId === r.id ? ' is-active' : ''}`} style={{ '--rc': recipientColor(i) }}>
+                    <div className="recipient-top">
+                      {sequential && r.role === 'signer' ? <span className="order-pill">{order}</span> : <span className="color-dot" aria-hidden="true" />}
+                      <select aria-label="Recipient role" value={r.role} onChange={(e) => updateRecipient(r.id, { role: e.target.value })}>
+                        <option value="signer">Needs to sign</option>
+                        <option value="cc">Receives a copy</option>
+                      </select>
+                      <div className="recipient-tools">
+                        <button className="icon-btn icon-btn-sm" onClick={() => moveRecipient(i, -1)} disabled={i === 0} aria-label="Move up"><ChevronUp size={14} /></button>
+                        <button className="icon-btn icon-btn-sm" onClick={() => moveRecipient(i, 1)} disabled={i === recipients.length - 1} aria-label="Move down"><ChevronDown size={14} /></button>
+                        <button className="icon-btn icon-btn-sm" onClick={() => removeRecipient(r.id)} aria-label={`Remove ${r.name || 'recipient'}`}><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                    <input className="input input-sm" placeholder={doc.isTemplate ? 'Role, e.g. Client' : 'Full name'} aria-label="Name" value={r.name}
+                      onChange={(e) => updateRecipient(r.id, { name: e.target.value })} onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
+                    {!doc.isTemplate && (
+                      <input className="input input-sm" type="email" placeholder="Email" aria-label="Email" value={r.email}
+                        onChange={(e) => updateRecipient(r.id, { email: e.target.value })} onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+            <div className="rail-row">
+              <Button size="sm" onClick={() => addRecipient()}><Plus size={14} aria-hidden="true" />Add recipient</Button>
+              {!doc.isTemplate && !hasMe && (
+                <Button size="sm" variant="ghost" onClick={() => addRecipient({ name: user.name, email: user.email })}><UserRound size={14} aria-hidden="true" />Add me</Button>
+              )}
+            </div>
+          </section>
+
+          <section className="rail-section">
+            <div className="rail-head"><h2>Fields</h2></div>
+            {signers.length > 1 && (
+              <div className="for-picker">
+                <span>Placing for</span>
+                <select aria-label="Placing fields for" value={activeId ?? ''} onChange={(e) => setActiveId(e.target.value)}>
+                  {signers.map((s) => <option key={s.id} value={s.id}>{s.name || 'Unnamed signer'}</option>)}
+                </select>
+              </div>
+            )}
+            {!signers.length ? (
+              <p className="rail-note">Add someone who needs to sign before placing fields.</p>
+            ) : (
+              <div className="palette" style={{ '--rc': colorOf(activeId) }}>
+                {Object.entries(FIELD_META).map(([type, meta]) => {
+                  const Icon = meta.icon;
+                  return (
+                    <button key={type} className={`palette-item${placing === type ? ' is-active' : ''}`} aria-pressed={placing === type}
+                      onClick={() => setPlacing(placing === type ? null : type)}>
+                      <Icon size={15} strokeWidth={1.75} aria-hidden="true" />{meta.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <p className="rail-note">{placing ? `Click on the page to place ${FIELD_META[placing].label.toLowerCase()}. Esc cancels.` : 'Pick a field, then click where it goes. Drag to move, arrow keys to nudge.'}</p>
+          </section>
+        </aside>
+
+        <main className={`editor-canvas${placing ? ' is-placing' : ''}`} onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null); }}>
+          <div className="editor-pages">
+            <PdfPages
+              url={`/api/documents/${doc.id}/file`}
+              onLoad={(sizes) => { pageSizes.current = sizes; }}
+              renderOverlay={(page, size) => (
+                <div className="page-overlay" onClick={(e) => { if (e.target === e.currentTarget) { placing ? placeAt(page, e, size) : setSelectedId(null); } }}>
+                  {fields.filter((f) => f.page === page).map((f) => (
+                    <EditorField key={f.id} field={f} size={size} color={colorOf(f.recipientId)} selected={f.id === selectedId}
+                      recipientName={recipients.find((r) => r.id === f.recipientId)?.name}
+                      onSelect={() => setSelectedId(f.id)} onChange={(patch) => updateField(f.id, patch)} />
+                  ))}
+                </div>
+              )}
+            />
+          </div>
+        </main>
+
+        <aside className="editor-panel">
+          {selected ? (
+            <section className="rail-section">
+              <div className="rail-head"><h2>{FIELD_META[selected.type].label}</h2></div>
+              <div className="field">
+                <label htmlFor="f-owner">Assigned to</label>
+                <select id="f-owner" className="input" value={selected.recipientId} onChange={(e) => updateField(selected.id, { recipientId: e.target.value })}>
+                  {signers.map((s) => <option key={s.id} value={s.id}>{s.name || 'Unnamed signer'}</option>)}
+                </select>
+              </div>
+              {selected.type === 'text' && (
+                <div className="field">
+                  <label htmlFor="f-label">Placeholder</label>
+                  <input id="f-label" className="input" value={selected.label} maxLength={80} placeholder="e.g. Company name" onChange={(e) => updateField(selected.id, { label: e.target.value })} />
+                </div>
+              )}
+              {!FIELD_META[selected.type].auto && (
+                <label className="check">
+                  <input type="checkbox" checked={selected.required} onChange={(e) => updateField(selected.id, { required: e.target.checked })} />
+                  Required
+                </label>
+              )}
+              {FIELD_META[selected.type].auto && <p className="rail-note">Filled in automatically when they sign.</p>}
+              <Button variant="danger-ghost" size="sm" onClick={() => removeField(selected.id)}><Trash2 size={14} aria-hidden="true" />Remove field</Button>
+            </section>
+          ) : (
+            <section className="rail-section">
+              <div className="rail-head"><h2>Message</h2></div>
+              <div className="field">
+                <label htmlFor="msg">Note to recipients</label>
+                <textarea id="msg" className="input" rows={5} maxLength={2000} placeholder="Optional. Shown in the email and on the signing page." value={message} onChange={(e) => setMessage(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="remind">Reminders</label>
+                <select id="remind" className="input" value={reminderDays} onChange={(e) => setReminderDays(Number(e.target.value))}>
+                  <option value={0}>Off</option>
+                  <option value={1}>Every day</option>
+                  <option value={2}>Every 2 days</option>
+                  <option value={3}>Every 3 days</option>
+                  <option value={7}>Every week</option>
+                </select>
+                <p className="field-hint">Sent by email while someone still needs to sign.</p>
+              </div>
+              <div className="summary">
+                <h3>Summary</h3>
+                <ul>
+                  {signers.map((s) => (
+                    <li key={s.id} style={{ '--rc': colorOf(s.id) }}>
+                      <span className="color-dot" aria-hidden="true" />
+                      <span className="summary-name">{s.name || 'Unnamed signer'}</span>
+                      <span className={fields.some((f) => f.recipientId === s.id && f.type === 'signature') ? 'summary-count' : 'summary-count is-missing'}>
+                        {fieldCount(s.id) ? `${fieldCount(s.id)} field${fieldCount(s.id) > 1 ? 's' : ''}` : 'No fields'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function EditorField({ field, size, color, selected, recipientName, onSelect, onChange }) {
+  const meta = FIELD_META[field.type];
+  const Icon = meta.icon;
+  const drag = useRef(null);
+
+  const start = (mode) => (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onSelect();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { mode, x: e.clientX, y: e.clientY, f: { ...field } };
+  };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = (e.clientX - d.x) / size.width;
+    const dy = (e.clientY - d.y) / size.height;
+    if (d.mode === 'move') {
+      onChange({ x: clamp01(Math.min(d.f.x + dx, 1 - d.f.w)), y: clamp01(Math.min(d.f.y + dy, 1 - d.f.h)) });
+    } else {
+      const minW = 12 / size.ptWidth, minH = 12 / size.ptHeight;
+      onChange({ w: Math.max(minW, Math.min(d.f.w + dx, 1 - d.f.x)), h: Math.max(minH, Math.min(d.f.h + dy, 1 - d.f.y)) });
+    }
+  };
+  const end = () => { drag.current = null; };
+
+  const px = { left: field.x * size.width, top: field.y * size.height, width: field.w * size.width, height: field.h * size.height };
+  const small = px.height < 26 || px.width < 70;
+
+  return (
+    <div
+      className={`efield${selected ? ' is-selected' : ''}${field.type === 'checkbox' ? ' is-check' : ''}`}
+      style={{ ...px, '--rc': color }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${meta.label} for ${recipientName || 'signer'}`}
+      onPointerDown={start('move')} onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+      onFocus={onSelect}
+    >
+      {field.type !== 'checkbox' && (
+        <span className="efield-label">
+          {!small && <Icon size={13} strokeWidth={1.75} aria-hidden="true" />}
+          {field.label || meta.label}{field.required && !meta.auto && <span className="efield-req" aria-hidden="true">*</span>}
+        </span>
+      )}
+      {selected && <span className="efield-handle" onPointerDown={start('resize')} onPointerMove={move} onPointerUp={end} aria-hidden="true" />}
+    </div>
+  );
+}

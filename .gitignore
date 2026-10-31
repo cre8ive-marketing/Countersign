@@ -1,0 +1,13 @@
+node_modules
+.next
+data
+public/pdf.worker.min.mjs
+.env
+.agent*
+# Local tooling, not part of the product
+.claude/skills/
+.claude/settings.local.json
+docs/shots-profile/
+docusign-com-teardown.md
+CLAUDE.md
+.claude/

@@ -1,0 +1,10 @@
+node_modules
+.next
+data
+.env
+.git
+.claude
+.agents
+.impeccable
+test
+docs/shots-profile

@@ -1,0 +1,12 @@
+services:
+  countersign:
+    build: .
+    ports: ["3000:3000"]
+    volumes: ["countersign-data:/data"]
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+volumes:
+  countersign-data:
