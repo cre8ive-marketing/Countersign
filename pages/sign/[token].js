@@ -153,7 +153,7 @@ function Signing({ token, doc, sender, me, fields, onDone }) {
           <span>From {sender.name}</span>
         </div>
         <div className="signer-bar-actions">
-          <button className="link-btn" onClick={() => declineDialog.current?.showModal()}>Decline</button>
+          <Button variant="ghost" type="button" onClick={() => declineDialog.current?.showModal()}>Decline</Button>
           <Button variant={remaining.length ? 'primary' : 'accent'} onClick={finish} loading={busy}>
             {remaining.length ? <>{started ? 'Next field' : 'Start'}<ArrowRight size={15} aria-hidden="true" /></> : 'Finish'}
           </Button>
@@ -210,7 +210,7 @@ function Signing({ token, doc, sender, me, fields, onDone }) {
           </div>
           <div className="dialog-actions">
             <Button variant="ghost" type="button" onClick={() => declineDialog.current?.close()}>Keep reviewing</Button>
-            <Button variant="danger" type="submit" loading={busy}>Decline</Button>
+            <Button variant="danger" type="submit" loading={busy}><Ban size={16} aria-hidden="true" />Decline</Button>
           </div>
         </form>
       </dialog>

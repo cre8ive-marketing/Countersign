@@ -81,7 +81,7 @@ export default function SiteNav({ session }) {
           <ul>
             {MENUS.map((m) => (
               <li key={m.label} onMouseEnter={() => hover(m.label)} onMouseLeave={() => hover(null)}>
-                <button type="button" className="mk-trigger" data-menu={m.label} aria-expanded={open === m.label} aria-controls={`mk-menu-${slug(m.label)}`}
+                <button type="button" className="btn btn-ghost mk-trigger" data-menu={m.label} aria-expanded={open === m.label} aria-controls={`mk-menu-${slug(m.label)}`}
                   onClick={() => { clearTimeout(hoverTimer.current); setOpen(open === m.label ? null : m.label); }} onKeyDown={(e) => onTriggerKey(e, m.label)}>
                   {m.label}<ChevronDown size={16} aria-hidden="true" />
                 </button>
@@ -99,11 +99,11 @@ export default function SiteNav({ session }) {
                 </div>
               </li>
             ))}
-            <li><Link href="/self-host" className="mk-trigger">Self-host</Link></li>
+            <li><Link href="/self-host" className="btn btn-ghost mk-trigger">Self-host</Link></li>
           </ul>
         </nav>
         <div className="mk-actions">
-          {!session.user && cta.href !== '/login' && <Link href="/login" className="lp-signin">Sign in</Link>}
+          {!session.user && cta.href !== '/login' && <Link href="/login" className="btn btn-ghost btn-sm lp-signin">Sign in</Link>}
           <Button variant="primary" size="sm" href={cta.href} className="mk-cta">{cta.label}</Button>
           <button type="button" ref={burger} className="icon-btn mk-burger" aria-expanded={drawer} aria-controls="mk-drawer" onClick={() => { setOpen(null); setDrawer(!drawer); }}>
             {drawer ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}

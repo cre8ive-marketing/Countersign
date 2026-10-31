@@ -15,7 +15,7 @@ export default function UseCases() {
           <h1>One signing workflow, shaped to the paperwork you send.</h1>
           <p className="lp-lead">The same features in four common setups. Every step below works in Countersign today.</p>
           <nav aria-label="Use cases" className="mk-jump">
-            {ROLES.map((r) => <Link key={r.id} href={`#${r.id}`}>{r.label}</Link>)}
+            {ROLES.map((r) => <Link key={r.id} href={`#${r.id}`} className="btn btn-secondary btn-sm">{r.label}</Link>)}
           </nav>
         </div>
       </section>
@@ -34,7 +34,7 @@ export default function UseCases() {
         </section>
       ))}
       <CloseBand>
-        <Button variant="primary" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button>
+        <Button variant="accent" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button>
       </CloseBand>
     </MarketingLayout>
   );

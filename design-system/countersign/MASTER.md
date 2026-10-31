@@ -17,26 +17,39 @@
 
 ### Color Palette
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#1E3A5F` | `--color-primary` |
-| On Primary | `#FFFFFF` | `--color-on-primary` |
-| Secondary | `#2563EB` | `--color-secondary` |
-| On Secondary | `#FFFFFF` | `--color-on-secondary` |
-| Accent/CTA | `#16A34A` | `--color-accent` |
-| On Accent/CTA | `#000000` | `--color-on-accent` |
-| Background | `#F8FAFC` | `--color-background` |
-| Foreground | `#0F172A` | `--color-foreground` |
-| Card | `#FFFFFF` | `--color-card` |
-| Card Foreground | `#0F172A` | `--color-card-foreground` |
-| Muted | `#E9EEF5` | `--color-muted` |
-| Muted Foreground | `#475569` | `--color-muted-foreground` |
-| Border | `#CBD5E1` | `--color-border` |
-| Destructive | `#DC2626` | `--color-destructive` |
-| On Destructive | `#FFFFFF` | `--color-on-destructive` |
-| Ring | `#1E3A5F` | `--color-ring` |
+Six brand colours are the only chromatic colours allowed anywhere in the UI. White (`#fff`) is allowed for cards and inputs. Every other neutral is mixed from the six with white or transparency (`color-mix()` or `rgba()` of a brand colour). Do not add a red, green, blue or gray hex.
 
-**Color Notes:** Trust navy + signature green + audit trail
+| Brand colour | Hex | CSS variable | Role |
+|---|---|---|---|
+| Ink | `#0B132B` | `--brand-ink` | Body text, headings, primary button fill, dark bands, logo tile |
+| Deep navy | `#1C2541` | `--brand-navy` | Primary hover and pressed, code blocks, signature ink, secondary dark surfaces |
+| Slate | `#3A506B` | `--brand-slate` | Muted text, links, icons, strong borders, focus ring on light surfaces |
+| Cyan | `#5BC0DE` | `--brand-cyan` | Only on dark surfaces (logo stroke, icons, focus ring) or as a tint (selection, "sent" badge, info banner). Never as text on light backgrounds (about 2:1) |
+| Sand | `#F4D6B0` | `--brand-sand` | Text on dark surfaces, warm tints, required-field fill, the danger button |
+| Amber | `#D97706` | `--brand-amber` | The signing accent: Sign, Adopt and sign, Finish, main marketing CTA, signed states, progress. Always ink text on amber, never white. Never amber text on white |
+
+| Semantic token | Value | Use |
+|---|---|---|
+| `--color-primary` / `-hover` | ink / navy | Primary buttons, active nav, switches |
+| `--color-secondary` | slate | Links and icons |
+| `--color-accent` / `-hover` | amber / amber 80% + sand | Accent buttons, progress, signed connectors |
+| `--color-accent-ink` | amber 70% + ink | Amber icons on tinted fills |
+| `--color-accent-soft` | amber 16% + white | Completed badge, "needs your signature" icon tile |
+| `--color-info-soft` | cyan 20% + white | Sent badge, info banners |
+| `--color-sand-soft` / `--color-destructive-soft` | sand 45% + white | Error boxes, declined/voided status icon |
+| `--color-background` | slate 4% + white | Page |
+| `--color-muted` | slate 10% + white | Hover fills, canvas, draft badge |
+| `--color-subtle` | slate 85% + white | Placeholders, captions |
+| `--color-border-strong` | slate 62% + white | Control edges (inputs, secondary buttons) |
+| `--color-border` / `-soft` | slate 28% / 15% + white | Rules and dividers |
+| `--color-destructive` / `-edge` | ink / amber | Error text (bold ink) and the edge of invalid inputs and error boxes |
+| `--color-ring` | slate | Focus outline (2px, 2px offset) on light; cyan on dark |
+| Shadows | `rgba(11, 19, 43, α)` | Ink-tinted depth only |
+| Recipients (`lib/client.js`) | deep cyan, burnt amber, ink, slate, warm stone, umber | Mixed from the palette, each 4.5:1+ on white and under white text |
+
+**Status without red or green:** draft is a slate tint, sent is a cyan tint, completed is an amber tint with an amber dot, and declined or voided is an outlined white pill. Every badge keeps its text label. Errors use bold ink text, a sand fill and an amber edge.
+
+**Color Notes:** Ink and slate for trust, amber for the act of signing, cyan and sand only as light on dark or as tints.
 
 ### Typography
 
@@ -68,10 +81,10 @@
 
 | Level | Value | Usage |
 |-------|-------|-------|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
-| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
+| `--shadow-sm` | `0 1px 2px rgba(11,19,43,0.06)` | Subtle lift (primary and accent buttons) |
+| `--shadow-md` | `0 4px 6px -1px rgba(11,19,43,0.08)` | PDF pages, menus |
+| `--shadow-lg` | `0 10px 15px -3px rgba(11,19,43,0.1)` | Certificate, status cards |
+| `--shadow-xl` | `0 20px 25px -5px rgba(11,19,43,0.12)` | Demo, dialogs, mega-menus |
 
 ---
 
@@ -79,51 +92,35 @@
 
 ### Buttons
 
-```css
-/* Primary Button */
-.btn-primary {
-  background: #16A34A;
-  color: #000000;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
+One system for every button-like control. Base `.btn`: 8px radius, Source Sans 3 600, 15px, 1px border, 200ms colour transitions, `translateY(1px)` when pressed, 0.55 opacity and `not-allowed` when disabled or busy, and the global focus ring (2px slate outline, 2px offset; cyan on dark surfaces).
 
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
+| Variant | Class | Fill / text / border | Hover | Use |
+|---|---|---|---|---|
+| Primary | `.btn-primary` | ink / white (18.4:1) | navy (15.1:1) | Main action on a screen: Send, Save, Download, nav CTA |
+| Accent | `.btn-accent` | amber / ink (5.8:1) | amber 80% + sand (6.8:1) | Signing only: Sign, Adopt and sign, Finish, main marketing CTA |
+| Secondary | `.btn-secondary` | white / ink / slate 62% edge (3.1:1) | page tint, slate edge | Alternatives: Original, Save as template, Copy signing link, Use, jump links, copy command |
+| Ghost | `.btn-ghost` | transparent / slate (8.3:1) | slate 10% tint, ink text | Low emphasis: Cancel, Dismiss, Decline trigger, Clear, Sign in, nav menu triggers |
+| Danger | `.btn-danger` | sand / ink (13.2:1) / amber-sand edge | sand 75% + amber (10.8:1) | Destructive: Void, Delete, Remove field, confirm Decline. Always with an icon (Ban, Trash) and a confirm step |
 
-/* Secondary Button */
-.btn-secondary {
-  background: transparent;
-  color: #1E3A5F;
-  border: 2px solid #1E3A5F;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-```
+| Size | Class | Height desktop / under 860px | Padding, font |
+|---|---|---|---|
+| Small | `.btn-sm` | 36px (40px hit area via `::after`) / 40px | 12px, 14px |
+| Default | none | 40px / 44px | 16px, 15px |
+| Large | `.btn-lg` | 48px / 48px | 22px, 16px |
+
+- Icon-only: `.icon-btn` is a ghost button at 40px (44px under 860px); `.icon-btn-sm` is 36px with a 40px hit area. Both need an `aria-label`.
+- `Button` in `components/ui.js` renders all of these (`variant`, `size`, `loading`, `href`).
+- Controls that cannot be a `.btn` reuse the same tokens: app tabs and `.mk-tablist` (ghost hover, ink underline), `.segmented` (40px segments, 8px radius, white active segment), `.palette-item` (secondary edge, 40px, pressed state, recipient-colour active ring).
+- Signing fields on the PDF (`.sfield`, `.efield`) are sized by the document, not by the button scale: required is a sand fill with an amber edge and ink "SIGN" text, filled is a slate tint.
 
 ### Cards
 
 ```css
 .card {
-  background: #F8FAFC;
+  background: #fff;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   padding: 24px;
-  box-shadow: var(--shadow-md);
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
 }
 ```
 
@@ -131,37 +128,22 @@
 
 ```css
 .input {
-  padding: 12px 16px;
-  border: 1px solid #E2E8F0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong); /* slate 62%, 3.1:1 on white */
   border-radius: 8px;
   font-size: 16px;
-  transition: border-color 200ms ease;
 }
-
 .input:focus {
-  border-color: #1E3A5F;
-  outline: none;
-  box-shadow: 0 0 0 3px #1E3A5F20;
+  border-color: var(--color-ring);              /* slate */
+  box-shadow: 0 0 0 3px rgba(91, 192, 222, 0.35);
 }
+.input[aria-invalid] { border-color: var(--brand-amber); }
 ```
 
 ### Modals
 
-```css
-.modal-overlay {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: var(--shadow-xl);
-  max-width: 500px;
-  width: 90%;
-}
-```
+Native `<dialog>` with `.dialog`: white, 12px radius, 32px padding, `--shadow-xl`, backdrop `rgba(11, 19, 43, 0.5)`. Actions sit right-aligned: ghost Cancel, then the primary or danger action.
 
 ---
 

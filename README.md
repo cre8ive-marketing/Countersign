@@ -9,11 +9,11 @@
 Upload a PDF, place fields, send it to everyone who needs to sign, and get back a signed PDF with a certificate of completion and a full audit trail.<br>
 No pricing. No seats. Your documents never leave your server.
 
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-1e3a5f.svg)](LICENSE)
-![Node.js 22.13+](https://img.shields.io/badge/node-%E2%89%A522.13-15803d.svg)
-![Next.js](https://img.shields.io/badge/Next.js-Pages%20Router-0f172a.svg)
-![Docker](https://img.shields.io/badge/docker-one%20container-2563eb.svg)
-![Database](https://img.shields.io/badge/database-SQLite-475569.svg)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-0B132B.svg)](LICENSE)
+![Node.js 22.13+](https://img.shields.io/badge/node-%E2%89%A522.13-1C2541.svg)
+![Next.js](https://img.shields.io/badge/Next.js-Pages%20Router-3A506B.svg)
+![Docker](https://img.shields.io/badge/docker-one%20container-5BC0DE.svg)
+![Database](https://img.shields.io/badge/database-SQLite-D97706.svg)
 
 [Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration) · [Security](#security-model) · [Contributing](#contributing)
 

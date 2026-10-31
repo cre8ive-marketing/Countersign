@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui';
 import { script } from '../lib/fonts';
 
-const INK = '#14213d';
+const INK = '#1C2541'; // deep navy from the brand palette
 
 // Lets a signer type or draw a signature; resolves to a trimmed transparent PNG data URL.
 export default function SignaturePad({ kind = 'signature', defaultName = '', onAdopt, onCancel }) {
@@ -80,7 +80,7 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
     <div className="sigpad">
       <div className="segmented" role="tablist" aria-label={`How to create your ${noun}`}>
         {['type', 'draw'].map((m) => (
-          <button key={m} role="tab" aria-selected={mode === m} className={mode === m ? 'is-active' : ''} onClick={() => setMode(m)}>
+          <button key={m} type="button" role="tab" aria-selected={mode === m} className={mode === m ? 'is-active' : ''} onClick={() => setMode(m)}>
             {m === 'type' ? 'Type' : 'Draw'}
           </button>
         ))}
@@ -96,7 +96,7 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
         <div className="sigpad-draw">
           <canvas ref={canvas} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} aria-label={`Draw your ${noun} here`} />
           <div className="sigpad-baseline" aria-hidden="true" />
-          {drawn && <button className="link-btn sigpad-clear" onClick={clear}>Clear</button>}
+          {drawn && <button type="button" className="btn btn-ghost btn-sm sigpad-clear" onClick={clear}>Clear</button>}
         </div>
       )}
 

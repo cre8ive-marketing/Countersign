@@ -19,7 +19,7 @@ The page architecture borrows the patterns of a large e-signature vendor's site 
 
 - No eyebrows above headings, no stats, no testimonials, no pricing, no compliance or legal-validity claims.
 - Copy describes only v1 capabilities. When a capability changes, update `/product`, `/security` and the role flows in `components/marketing/RoleTabs.js`.
-- Tinted panels use `#eef3f9` (navy tint). Dark band uses `--color-primary`; focus rings on dark use `--accent-on-ink`.
+- Tinted panels use slate 7% mixed with white (`.mk-tint`). Dark band uses `--color-primary`; focus rings on dark use `--accent-on-ink`.
 - One motion moment per page: the hero demo signature. Menus fade in at 160ms; reduced motion turns it off.
 - Mega-menus are disclosure buttons (`aria-expanded`), opened by click, Enter, Space or ArrowDown, and by hover after 120ms. Escape closes and returns focus. Focus leaving the header closes them.
 - Under 860px the nav becomes a drawer with `<details>` groups, 44px rows and scroll lock.

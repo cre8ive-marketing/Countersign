@@ -4,7 +4,7 @@ import { Check, Copy } from 'lucide-react';
 export default function CopyCommand({ command }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button type="button" className="cmd" onClick={() => { navigator.clipboard?.writeText(command); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+    <button type="button" className="btn btn-secondary btn-lg cmd" onClick={() => { navigator.clipboard?.writeText(command); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
       <span className="cmd-prompt" aria-hidden="true">$</span>
       <code>{command}</code>
       <span className="cmd-icon" aria-hidden="true">{copied ? <Check size={16} /> : <Copy size={16} />}</span>

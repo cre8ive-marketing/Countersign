@@ -155,7 +155,7 @@ export default function Home() {
       </section>
 
       <CloseBand>
-        <Button variant="primary" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button>
+        <Button variant="accent" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button>
         <CopyCommand command="docker compose up -d" />
       </CloseBand>
     </MarketingLayout>
@@ -170,7 +170,7 @@ function HeroStart({ session }) {
   if (session.user) {
     return (
       <div className="lp-hero-actions">
-        <Button variant="primary" size="lg" href="/app">Open app<ArrowRight size={18} aria-hidden="true" /></Button>
+        <Button variant="accent" size="lg" href="/app">Open app<ArrowRight size={18} aria-hidden="true" /></Button>
         <CopyCommand command="docker compose up -d" />
       </div>
     );
@@ -182,7 +182,7 @@ function HeroStart({ session }) {
       <div className="mk-start-row">
         <input id="start-email" className="input" type="email" autoComplete="email" placeholder="you@company.com" required maxLength={254}
           value={email} onChange={(e) => setEmail(e.target.value)} />
-        <Button variant="primary" size="lg" type="submit" loading={busy}>{session.signupOpen ? 'Create account' : 'Continue to sign in'}</Button>
+        <Button variant="accent" size="lg" type="submit" loading={busy}>{session.signupOpen ? 'Create account' : 'Continue to sign in'}</Button>
       </div>
       <p className="mk-start-note">
         {session.signupOpen

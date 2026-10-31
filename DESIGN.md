@@ -4,16 +4,33 @@ Countersign uses **Minimalism & Swiss Style**, generated with the ui-ux-pro-max 
 
 ## Colour roles
 
-| Token | Value | Use |
+Six brand colours only: `#0B132B` ink, `#1C2541` deep navy, `#3A506B` slate, `#5BC0DE` cyan, `#F4D6B0` sand, `#D97706` amber. White is allowed for cards and inputs; every other neutral is a `color-mix()` of a brand colour with white, or an `rgba()` of one. No red, green, blue or gray hexes. Full token table in MASTER.md.
+
+| Role | Colour | Contrast |
 |---|---|---|
-| `--color-primary` | `#1E3A5F` trust navy | Brand, headings on marketing pages, primary buttons, active nav |
-| `--color-secondary` | `#2563EB` | Links, focus rings, selection, feature icons |
-| `--color-accent` | `#15803D` (from `#16A34A`, darkened so white text passes 4.5:1) | Signing and completion only: "Adopt and sign", "Finish", signed states, progress |
-| `--color-background` / `--color-card` / `--color-muted` | `#F8FAFC` / `#FFF` / `#E9EEF5` | Page, surfaces, document canvas |
-| `--color-foreground` / `--color-muted-foreground` | `#0F172A` / `#475569` | Text (both pass AA on white and background) |
-| `--color-border` / `--color-border-soft` | `#CBD5E1` / `#E2E8F0` | Control borders, dividers and ruled grids |
-| `--color-destructive`, `--color-warn` | `#DC2626`, `#B45309` | Void, decline, errors; waiting states |
-| Recipient palette | `#2563EB #B45309 #0F766E #BE185D #6D28D9 #4D7C0F` | One hue per recipient (`lib/client.js`) |
+| Text, headings, primary button, dark bands, logo tile | ink | 18.4:1 on white |
+| Primary hover, code blocks, signature ink | navy | white on navy 15.1:1 |
+| Muted text, links, icons, focus ring, control edges (62% mix) | slate | 8.3:1 on white; 62% edge 3.1:1 |
+| Signing accent: Sign, Adopt and sign, Finish, main marketing CTA, progress | amber, ink text | 5.8:1; never white on amber, never amber text on white |
+| On dark: logo stroke, icons, focus ring; tints: selection, sent badge, info banner | cyan | 8.8:1 on ink; never text on light |
+| On dark: body text; warm tints, required fields, danger button | sand | 13.2:1 on ink; ink on sand 13.2:1 |
+| Recipients (`lib/client.js`) | deep cyan, burnt amber, ink, slate, warm stone, umber (palette mixes) | each 4.5:1+ on white and under white text |
+
+Destructive actions and errors add no new hue. Danger buttons are sand with ink text and always carry an icon and a confirm step. Errors are bold ink text on a sand tint with an amber edge. Status badges: draft slate tint, sent cyan tint, completed amber tint, declined/voided outlined; each keeps its label.
+
+## Buttons
+
+One `.btn` base (8px radius, 600 weight, 15px, pressed `translateY(1px)`, 0.55 opacity when disabled or busy, 2px slate focus ring; cyan on dark) with five variants and three sizes. See MASTER.md for the table.
+
+| Variant | Look | Use |
+|---|---|---|
+| `primary` | ink fill, white text | Main action per screen, nav CTA |
+| `accent` | amber fill, ink text | Signing and the main marketing CTA |
+| `secondary` | white, slate edge, ink text | Alternatives, copy link, jump links, copy command |
+| `ghost` | transparent, slate text | Cancel, Dismiss, Decline trigger, nav triggers, `.icon-btn` |
+| `danger` | sand fill, ink text, icon | Void, Delete, Remove field, confirm Decline |
+
+Sizes: `sm` 36px (40px hit area), default 40px, `lg` 48px; under 860px default is 44px and `sm` 40px. Tabs, the Type/Draw segmented control and the field palette reuse the same radius, weight, hover, pressed and focus tokens.
 
 ## Type
 
@@ -34,7 +51,7 @@ Countersign uses **Minimalism & Swiss Style**, generated with the ui-ux-pro-max 
 
 ## Layout
 
-- Marketing site (`/`, `/product`, `/use-cases`, `/self-host`, `/security`): 1200px grid, statically rendered, shared chrome in `components/marketing/` (navy utility bar, sticky nav with Product / Use cases / Resources mega-menus, a drawer under 860px, rich footer). Section rules and the honest replacements for borrowed patterns are in [design-system/countersign/pages/marketing.md](design-system/countersign/pages/marketing.md). The home hero is split: copy with an inline email start on one side, a live signing demo on the other.
+- Marketing site (`/`, `/product`, `/use-cases`, `/self-host`, `/security`): 1200px grid, statically rendered, shared chrome in `components/marketing/` (ink utility bar, sticky nav with Product / Use cases / Resources mega-menus, a drawer under 860px, rich footer). Section rules and the honest replacements for borrowed patterns are in [design-system/countersign/pages/marketing.md](design-system/countersign/pages/marketing.md). The home hero is split: copy with an inline email start on one side, a live signing demo on the other.
 - App: 248px sidebar, which becomes a top bar under 860px. The content area is 1080px wide (1320px on document detail).
 - Editor: 312px rail, PDF canvas, and a 288px panel that hides under 1100px. The signer view uses a single column up to 880px and works at 375px.
-- Auth: a navy panel with the product's promise beside the form. The panel collapses to the form alone on smaller screens.
+- Auth: an ink panel with the product's promise beside the form. The panel collapses to the form alone on smaller screens.

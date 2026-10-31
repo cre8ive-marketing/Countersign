@@ -132,7 +132,7 @@ export default function Documents({ user, isTemplates, docs, action }) {
                     <span className="doc-icon is-action"><PenLine size={16} strokeWidth={1.75} aria-hidden="true" /></span>
                     <span className="doc-main"><strong>{a.title}</strong><span>{a.own ? 'Sent by you' : `From ${a.sender}`}</span></span>
                     <span className="doc-meta">{relativeTime(a.updated_at)}</span>
-                    <span className="btn btn-primary btn-sm">Sign</span>
+                    <span className="btn btn-accent btn-sm">Sign</span>
                   </Link>
                 </li>
               ))}
@@ -178,7 +178,7 @@ function DocRow({ doc, isTemplate, onUse }) {
         {!isTemplate && <StatusBadge status={doc.status} />}
         <span className="doc-meta">{relativeTime(doc.updated_at)}</span>
         {isTemplate
-          ? <button className="btn btn-secondary btn-sm" onClick={(e) => { e.preventDefault(); onUse(); }}>Use</button>
+          ? <button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.preventDefault(); onUse(); }}>Use</button>
           : <ChevronRight size={16} className="doc-chevron" aria-hidden="true" />}
       </Link>
     </li>

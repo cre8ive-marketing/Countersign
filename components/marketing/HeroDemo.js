@@ -46,7 +46,7 @@ export default function HeroDemo() {
               <li><CircleCheck size={16} aria-hidden="true" /><strong>Completed</strong><span>Signed PDF and certificate generated · {time}</span></li>
               <li><Signature size={16} aria-hidden="true" /><strong>Signed</strong><span>{name} · {time}</span></li>
             </ol>
-            <button type="button" className="link-btn" onClick={() => { setSigned(false); setName(''); }}>Reset example</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setSigned(false); setName(''); }}>Reset example</button>
           </div>
         )}
       </div>

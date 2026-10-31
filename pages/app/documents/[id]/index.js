@@ -81,9 +81,9 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
               const { id } = await apiFetch(`/api/documents/${doc.id}/copy`, { body: { asTemplate: true } });
               router.push(`/app/documents/${id}/edit`);
             })} loading={busy === 'tpl'}><LayoutTemplate size={16} aria-hidden="true" />Save as template</Button>
-            {doc.status === 'sent' && <Button variant="danger-ghost" onClick={() => voidDialog.current.showModal()}><Ban size={16} aria-hidden="true" />Void</Button>}
+            {doc.status === 'sent' && <Button variant="danger" onClick={() => voidDialog.current.showModal()}><Ban size={16} aria-hidden="true" />Void</Button>}
             {(doc.status === 'voided' || doc.status === 'declined') && (
-              <Button variant="danger-ghost" loading={busy === 'del'} onClick={() => confirm('Delete this document and its audit trail?') && run('del', async () => {
+              <Button variant="danger" loading={busy === 'del'} onClick={() => confirm('Delete this document and its audit trail?') && run('del', async () => {
                 await apiFetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
                 router.push('/app');
               })}><Trash2 size={16} aria-hidden="true" />Delete</Button>
@@ -91,7 +91,7 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
           </div>
         </header>
 
-        {notice && <div className="banner banner-ok" role="status"><span>{notice}</span><button className="link-btn" onClick={() => setNotice(null)}>Dismiss</button></div>}
+        {notice && <div className="banner banner-ok" role="status"><span>{notice}</span><button type="button" className="btn btn-ghost btn-sm" onClick={() => setNotice(null)}>Dismiss</button></div>}
         {error && <div className="banner banner-bad" role="alert">{error}</div>}
 
         <div className="detail">
@@ -120,12 +120,12 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
                         {r.declined_reason && <p className="route-reason">“{r.declined_reason}”</p>}
                         {waiting && (
                           <div className="route-actions">
-                            <button className="chip-btn" onClick={() => copyLink(r)}>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => copyLink(r)}>
                               {copied === r.id ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
                               {copied === r.id ? 'Copied' : 'Copy signing link'}
                             </button>
                             {mail && (
-                              <button className="chip-btn" disabled={busy === r.id} onClick={() => run(r.id, () => apiFetch(`/api/documents/${doc.id}/remind`, { body: { recipientId: r.id } }), `Reminder sent to ${r.name}.`)}>
+                              <button type="button" className="btn btn-secondary btn-sm" disabled={busy === r.id} onClick={() => run(r.id, () => apiFetch(`/api/documents/${doc.id}/remind`, { body: { recipientId: r.id } }), `Reminder sent to ${r.name}.`)}>
                                 <Bell size={13} aria-hidden="true" />Remind
                               </button>
                             )}
@@ -182,7 +182,7 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
           </div>
           <div className="dialog-actions">
             <Button variant="ghost" type="button" onClick={() => voidDialog.current.close()}>Cancel</Button>
-            <Button variant="danger" type="submit">Void document</Button>
+            <Button variant="danger" type="submit"><Ban size={16} aria-hidden="true" />Void document</Button>
           </div>
         </form>
       </dialog>

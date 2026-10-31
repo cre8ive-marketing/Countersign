@@ -45,7 +45,7 @@ export default function Product() {
         <div className="lp-wrap">
           <h1>The whole signing workflow, and nothing locked.</h1>
           <p className="lp-lead">Upload, place fields, route to every signer, and get a signed PDF with a certificate back. If it is in the code, you have it.</p>
-          <div className="lp-hero-actions"><Button variant="primary" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button></div>
+          <div className="lp-hero-actions"><Button variant="accent" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button></div>
         </div>
       </section>
       {SECTIONS.map(([id, title, body, points]) => (
@@ -60,7 +60,7 @@ export default function Product() {
         </section>
       ))}
       <CloseBand>
-        <Button variant="primary" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button>
+        <Button variant="accent" size="lg" href={cta.href}>{cta.label}<ArrowRight size={18} aria-hidden="true" /></Button>
         <Button variant="secondary" size="lg" href="/self-host">Self-host guide</Button>
       </CloseBand>
     </MarketingLayout>

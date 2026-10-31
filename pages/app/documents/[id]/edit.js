@@ -167,7 +167,7 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
         </div>
       </header>
 
-      {error && <div className="editor-error" role="alert"><span>{error}</span><button className="link-btn" onClick={() => setError(null)}>Dismiss</button></div>}
+      {error && <div className="editor-error" role="alert"><span>{error}</span><button type="button" className="btn btn-ghost btn-sm" onClick={() => setError(null)}>Dismiss</button></div>}
 
       <div className="editor-body">
         <aside className="editor-rail">
@@ -285,7 +285,7 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
                 </label>
               )}
               {FIELD_META[selected.type].auto && <p className="rail-note">Filled in automatically when they sign.</p>}
-              <Button variant="danger-ghost" size="sm" onClick={() => removeField(selected.id)}><Trash2 size={14} aria-hidden="true" />Remove field</Button>
+              <Button variant="danger" size="sm" onClick={() => removeField(selected.id)}><Trash2 size={14} aria-hidden="true" />Remove field</Button>
             </section>
           ) : (
             <section className="rail-section">
