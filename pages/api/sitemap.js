@@ -1,7 +1,7 @@
 import { api, appUrl } from '../../lib/http';
 
 // Must match the public marketing pages in pages/**; update when one is added or removed.
-const PATHS = ['/', '/product', '/use-cases', '/self-host', '/security'];
+const PATHS = ['/', '/product', '/use-cases', '/self-host', '/security', '/verify'];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

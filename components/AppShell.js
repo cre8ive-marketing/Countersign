@@ -1,13 +1,14 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Files, LayoutTemplate, Settings, LogOut } from 'lucide-react';
+import { Files, LayoutTemplate, BookUser, Settings, LogOut } from 'lucide-react';
 import { Logo, Avatar } from './ui';
 import { apiFetch } from '../lib/client';
 
 const NAV = [
   { href: '/app', label: 'Documents', icon: Files, match: (p, q) => p === '/app' && q.view !== 'templates' || p.startsWith('/app/documents') },
   { href: '/app?view=templates', label: 'Templates', icon: LayoutTemplate, match: (p, q) => p === '/app' && q.view === 'templates' },
+  { href: '/app/contacts', label: 'Contacts', icon: BookUser, match: (p) => p === '/app/contacts' },
   { href: '/app/settings', label: 'Settings', icon: Settings, match: (p) => p === '/app/settings' },
 ];
 

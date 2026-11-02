@@ -25,10 +25,11 @@ const MAX_URL = 400000; // the server rejects longer data URLs
 const MAX_W = 900, MAX_H = 300;
 
 // Lets a signer type, draw or upload a signature (a stamp is upload only); resolves to a trimmed transparent PNG data URL.
-export default function SignaturePad({ kind = 'signature', defaultName = '', onAdopt, onCancel }) {
+// saved: the signed-in signer's saved PNG, offered first. forAccount: saving to Settings rather than signing a document.
+export default function SignaturePad({ kind = 'signature', defaultName = '', saved = null, forAccount = false, saving = false, onAdopt, onCancel }) {
   const noun = { initials: 'initials', stamp: 'stamp' }[kind] ?? 'signature';
   const initialsOf = (n) => n.split(/\s+/).filter(Boolean).map((p) => p[0]).join('').toUpperCase().slice(0, 3);
-  const modes = kind === 'stamp' ? ['upload'] : ['type', 'draw', 'upload'];
+  const modes = kind === 'stamp' ? ['upload'] : [...(saved ? ['saved'] : []), 'type', 'draw', 'upload'];
   const [mode, setMode] = useState(modes[0]);
   const [text, setText] = useState(kind === 'initials' ? initialsOf(defaultName) : defaultName);
   const [style, setStyle] = useState(STYLES[0].id);
@@ -104,6 +105,7 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
   }
 
   async function adopt() {
+    if (mode === 'saved') return onAdopt(saved);
     if (mode === 'upload') return onAdopt(upload);
     if (mode === 'draw') return onAdopt(fit(trim(canvas.current)));
     setBusy(true);
@@ -117,7 +119,7 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
     }
   }
 
-  const ready = { type: text.trim().length > 0, draw: drawn, upload: Boolean(upload) }[mode];
+  const ready = { saved: true, type: text.trim().length > 0, draw: drawn, upload: Boolean(upload) }[mode];
   const sample = text.trim() || (kind === 'initials' ? 'AB' : 'Your name');
 
   return (
@@ -125,10 +127,17 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
       {modes.length > 1 && <div className="segmented" role="tablist" aria-label={`How to create your ${noun}`}>
         {modes.map((m) => (
           <button key={m} type="button" role="tab" aria-selected={mode === m} className={mode === m ? 'is-active' : ''} onClick={() => setMode(m)}>
-            {{ type: 'Type', draw: 'Draw', upload: 'Upload' }[m]}
+            {{ saved: 'Saved', type: 'Type', draw: 'Draw', upload: 'Upload' }[m]}
           </button>
         ))}
       </div>}
+
+      {mode === 'saved' && (
+        <div className="sigpad-upload">
+          <p className="sigpad-legal">Use my saved {noun}, from the Settings of the account you are signed in to.</p>
+          <div className="sigpad-preview sigpad-image"><img src={saved} alt={`Your saved ${noun}`} /></div>
+        </div>
+      )}
 
       {mode === 'type' && (
         <div className="sigpad-type">
@@ -171,13 +180,17 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
         </div>
       )}
 
-      <p className="sigpad-legal">{kind === 'stamp'
-        ? 'By adopting, you agree to place this stamp on the document as your mark.'
-        : `By adopting, you agree ${kind === 'initials' ? 'these initials are' : 'this signature is'} the legal equivalent of your handwritten ${noun} on this document.`}</p>
+      <p className="sigpad-legal">{forAccount
+        ? `Nothing is signed now. When you open a signing link sent to your account’s email while signed in, you can choose to use your saved ${noun}.`
+        : kind === 'stamp'
+          ? 'By adopting, you agree to place this stamp on the document as your mark.'
+          : `By adopting, you agree to use ${kind === 'initials' ? 'these initials' : 'this signature'} as your mark on this document.`}</p>
       <p className="sigpad-note"><Lock size={14} aria-hidden="true" />Your {noun} {kind === 'initials' ? 'are' : 'is'} stored encrypted on this server.</p>
       <div className="sigpad-actions">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button variant="accent" onClick={adopt} disabled={!ready || busy} loading={busy && mode === 'type'}>{kind === 'stamp' ? 'Adopt and stamp' : 'Adopt and sign'}</Button>
+        <Button variant={forAccount ? 'primary' : 'accent'} onClick={adopt} disabled={!ready || busy || saving} loading={(busy && mode === 'type') || saving}>
+          {forAccount ? `Save ${noun}` : kind === 'stamp' ? 'Adopt and stamp' : 'Adopt and sign'}
+        </Button>
       </div>
     </div>
   );

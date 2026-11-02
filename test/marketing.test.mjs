@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
-const PAGES = ['/', '/product', '/use-cases', '/self-host', '/security'];
+const PAGES = ['/', '/product', '/use-cases', '/self-host', '/security', '/verify']; // /verify added in Tier 2
 const get = (path, opts = {}) => fetch(BASE + path, { redirect: 'manual', ...opts });
 
 test('every marketing page returns 200 HTML', async () => {
@@ -60,7 +60,7 @@ test('robots.txt: plain text, disallows private paths, absolute Sitemap line', a
   assert.match(sitemap, /^Sitemap: https?:\/\/[^/\s]+\/sitemap\.xml$/);
 });
 
-test('sitemap.xml lists exactly the five public pages as absolute URLs', async () => {
+test('sitemap.xml lists exactly the six public pages as absolute URLs', async () => {
   const res = await get('/sitemap.xml');
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type'), /xml/);
@@ -68,7 +68,7 @@ test('sitemap.xml lists exactly the five public pages as absolute URLs', async (
   assert.match(xml, /^<\?xml version="1\.0"/);
   assert.match(xml, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">[\s\S]*<\/urlset>/);
   const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-  assert.equal(locs.length, 5);
+  assert.equal(locs.length, PAGES.length);
   const urls = locs.map((l) => new URL(l)); // throws if any loc is not absolute
   assert.equal(new Set(urls.map((u) => u.origin)).size, 1);
   assert.deepEqual(urls.map((u) => u.pathname).sort(), [...PAGES].sort());

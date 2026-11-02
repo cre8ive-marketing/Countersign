@@ -5,7 +5,7 @@ export const config = { api: { bodyParser: { sizeLimit: '8mb' } } };
 
 export default api({
   async POST(req, res) {
-    const status = await submitSignature(req.query.token, req.body?.values, req, appUrl(req));
-    res.json({ status });
+    const { status, redirectUrl } = await submitSignature(req.query.token, req.body?.values, req, appUrl(req));
+    res.json(redirectUrl ? { status, redirectUrl } : { status });
   },
 }, { auth: false });

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { ArrowRight, Download, CircleCheck, Clock, Ban, Lock, Link2Off, X, MailCheck, CalendarClock } from 'lucide-react';
+import { ArrowRight, Download, CircleCheck, Clock, Ban, Lock, Link2Off, X, MailCheck, CalendarClock, ExternalLink } from 'lucide-react';
 import { signerByToken, markViewed, signerVerified, maskEmail } from '../../lib/documents';
+import { getUser } from '../../lib/auth';
+import { savedSignatures } from '../../lib/signatures';
 import db from '../../lib/db';
-import { apiFetch, FIELD_META, NUMBER_RE } from '../../lib/client';
+import { apiFetch, FIELD_META, NUMBER_RE, redirectUrlError } from '../../lib/client';
 import { Button, Logo } from '../../components/ui';
 import PdfPages from '../../components/PdfPages';
 import SignaturePad from '../../components/SignaturePad';
@@ -40,6 +42,13 @@ export async function getServerSideProps({ params, req, res }) {
   }
   if (doc.status === 'sent') markViewed(r, req);
 
+  // Saved signatures go only to a verified signer who is signed in to the account with this recipient's email.
+  const viewer = state === 'sign' ? getUser(req) : null;
+  let saved = null;
+  if (viewer && viewer.email.toLowerCase() === r.email.toLowerCase()) {
+    try { saved = savedSignatures(viewer.id); } catch (e) { console.error('Saved signature unreadable:', e.message); } // never block signing on it
+  }
+
   return {
     props: {
       token: params.token,
@@ -54,20 +63,25 @@ export async function getServerSideProps({ params, req, res }) {
         options: f.options,
       })) : [],
       notice,
+      savedSignature: saved?.signature ?? null,
+      savedInitials: saved?.initials ?? null,
     },
   };
 }
 
-export default function SignPage({ token, state: initialState, doc, sender, me, fields, notice, maskedEmail }) {
+export default function SignPage({ token, state: initialState, doc, sender, me, fields, notice, maskedEmail, savedSignature = null, savedInitials = null }) {
   const [state, setState] = useState(initialState);
+  const [redirectUrl, setRedirectUrl] = useState(null);
+  // The server validates the address too; this only refuses anything that is not plain https.
+  const done = (next, url) => { setRedirectUrl(url && !redirectUrlError(url) ? url : null); setState(next); };
   return (
     <div className="signer">
       <Head><title>{`${doc?.title ?? 'Signing link'} · Countersign`}</title><meta name="robots" content="noindex" /></Head>
       {state === 'sign'
-        ? <Signing token={token} doc={doc} sender={sender} me={me} fields={fields} onDone={setState} />
+        ? <Signing token={token} doc={doc} sender={sender} me={me} fields={fields} saved={{ signature: savedSignature, initials: savedInitials }} onDone={done} />
         : state === 'verify'
           ? <Verify token={token} doc={doc} sender={sender} maskedEmail={maskedEmail} />
-          : <Status state={state} token={token} doc={doc} sender={sender} notice={notice} />}
+          : <Status state={state} token={token} doc={doc} sender={sender} notice={notice} redirectUrl={redirectUrl} />}
     </div>
   );
 }
@@ -151,7 +165,7 @@ function Verify({ token, doc, sender, maskedEmail }) {
   );
 }
 
-function Status({ state, token, doc, sender, notice }) {
+function Status({ state, token, doc, sender, notice, redirectUrl }) {
   // Link-error states have no document or sender, and every body below is built eagerly.
   const title = doc?.title, from = sender?.name;
   const content = {
@@ -177,13 +191,23 @@ function Status({ state, token, doc, sender, notice }) {
         {state === 'completed' && (
           <Button variant="primary" href={`/api/sign/${token}/file?download=1`}><Download size={16} aria-hidden="true" />Download signed PDF</Button>
         )}
+        {redirectUrl && <Continue url={redirectUrl} primary={state !== 'completed'} />}
         <p className="status-foot"><Lock size={12} aria-hidden="true" />{sender ? `Sent by ${sender.name} (${sender.email}) from a self-hosted Countersign server` : 'A self-hosted Countersign server'}</p>
       </div>
     </div>
   );
 }
 
-function Signing({ token, doc, sender, me, fields, onDone }) {
+// Shown after submitting when the sender set an "after signing" address. Never navigates on its own: the signer clicks.
+function Continue({ url, primary }) {
+  return (
+    <div className="continue">
+      <a className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}`} href={url} rel="noreferrer">Continue to {new URL(url).host}<ExternalLink size={15} aria-hidden="true" /></a>
+    </div>
+  );
+}
+
+function Signing({ token, doc, sender, me, fields, saved, onDone }) {
   const mine = fields.filter((f) => f.mine);
   const today = useMemo(() => new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), []);
   const [values, setValues] = useState({});
@@ -235,8 +259,8 @@ function Signing({ token, doc, sender, me, fields, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      const { status } = await apiFetch(`/api/sign/${token}`, { body: { values } });
-      onDone(status === 'completed' ? 'completed' : 'waiting');
+      const { status, redirectUrl } = await apiFetch(`/api/sign/${token}`, { body: { values } });
+      onDone(status === 'completed' ? 'completed' : 'waiting', redirectUrl);
     } catch (e) {
       setError(e.message);
       setBusy(false);
@@ -307,7 +331,7 @@ function Signing({ token, doc, sender, me, fields, onDone }) {
         {pad && (
           <>
             <h2 id="pad-title">{{ initials: 'Adopt your initials', stamp: 'Upload your stamp' }[pad.kind] ?? 'Adopt your signature'}</h2>
-            <SignaturePad kind={pad.kind} defaultName={me.name} onAdopt={adopt} onCancel={() => padDialog.current?.close()} />
+            <SignaturePad kind={pad.kind} defaultName={me.name} saved={saved[pad.kind] ?? null} onAdopt={adopt} onCancel={() => padDialog.current?.close()} />
           </>
         )}
       </dialog>

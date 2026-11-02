@@ -46,7 +46,7 @@ Most teams only need the core of an e-signature product: send a PDF, collect sig
 Upload any PDF and click to place **signature, initials, stamp, date signed, full name, email, company, job title, text, number, checkbox, dropdown and radio** fields. Drag to move, resize from the corner, nudge with the arrow keys. Each recipient gets their own colour.
 
 ### Route
-Any number of signers, plus people who only receive a copy. Sign **in parallel or in a set order**; the next person is notified the moment the previous one finishes. Add a message and automatic email reminders, set the document to **expire** after a number of days, and optionally require each signer to enter a **one-time code** emailed to them before they can see or sign it. Or **sign it yourself** with no one else involved.
+Any number of signers, plus people who only receive a copy. Sign **in parallel or in a set order**; the next person is notified the moment the previous one finishes. Add a message and automatic email reminders, set the document to **expire** after a number of days, and optionally require each signer to enter a **one-time code** emailed to them before they can see or sign it. Or **sign it yourself** with no one else involved. Optionally send signers to an https address of your choice when they finish (they click to continue).
 
 ### Templates
 Save a document with fields placed for roles like *Client* and *Agency*. Reuse it and only type names and emails.
@@ -55,13 +55,13 @@ Save a document with fields placed for roles like *Client* and *Agency*. Reuse i
 <td width="50%" valign="top">
 
 ### Sign
-A guided walkthrough jumps from field to field. Signers **type** a signature in one of five handwriting styles, **draw** it, or **upload** a photo or scan of their own (the background is removed in the browser). They adopt it once and reuse it everywhere. Works with a mouse, trackpad, finger or keyboard, and on small phones.
+A guided walkthrough jumps from field to field. Signers **type** a signature in one of five handwriting styles, **draw** it, or **upload** a photo or scan of their own (the background is removed in the browser). They adopt it once and reuse it everywhere. Account holders can save a signature and initials (stored encrypted) and reuse them whenever a signing link is addressed to them. Works with a mouse, trackpad, finger or keyboard, and on small phones.
 
 ### Finish
-When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail. The finished PDF then gets a **digital seal** (a PKCS#7 signature over the whole file), so PDF readers can show whether it was changed afterwards.
+When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail. The finished PDF then gets a **digital seal** (a PKCS#7 signature over the whole file), so PDF readers can show whether it was changed afterwards. Anyone with a copy can check it on the public **/verify** page: the file is fingerprinted (SHA-256) in their browser and never uploaded.
 
 ### Manage
-A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time.
+A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time. **Contacts** fill in as you send (or import a CSV) and are suggested while you type recipients. Edit the **invite and completion emails** with placeholders such as `{{receiver_name}}` and `{{document_title}}`; the signing button is always added.
 
 </td>
 </tr>
@@ -118,7 +118,7 @@ Data goes to `./data` unless `DATA_DIR` is set.
 | `DATA_DIR` | `./data` (`/data` in Docker) | Where the database and PDFs are stored. |
 | `ALLOW_SIGNUP` | `false` | The first account can always sign up. Set `true` to let anyone create an account. |
 | `ENCRYPTION_KEY` | generated file in `DATA_DIR` | 32-byte AES-256 key as 64 hex characters or base64. Encrypts every PDF and field value. Back it up; changing or losing it makes existing documents unreadable. |
-| `TRUST_PROXY` | `false` | Set `true` behind a reverse proxy so the audit trail and login limits use the client IP from `X-Forwarded-For`. Leave it off when clients connect directly. |
+| `TRUST_PROXY` | `false` | Set `true` behind a reverse proxy so the audit trail, login limits and the /verify limit (60 checks an hour per address) use the client IP from `X-Forwarded-For`. Leave it off when clients connect directly. |
 | `TOKEN_TTL_DAYS` | `30` | How long a signing link stays valid. Reminders and a signer's turn coming up extend it. |
 | `SESSION_IDLE_MINUTES` `SESSION_MAX_DAYS` | `60`, `7` | Sign-in sessions end after this much inactivity, or this long after sign-in. |
 | `LOGIN_MAX_ATTEMPTS` `LOGIN_IP_MAX_ATTEMPTS` | `5`, `50` | Failed sign-ins allowed per account from one address, and per address, within 15 minutes before a 15-minute lock. |

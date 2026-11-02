@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  ChevronDown, Menu, X, MousePointerClick, ListOrdered, Smartphone, LayoutTemplate, FileCheck2, BellRing,
+  ChevronDown, Menu, X, MousePointerClick, ListOrdered, Smartphone, LayoutTemplate, FileCheck2, BellRing, FileSearch,
   Briefcase, FileSignature, UserPlus, ClipboardCheck, Server, Settings2, ShieldCheck, Scale, FolderGit2,
 } from 'lucide-react';
 import { Logo, Button } from '../ui';
@@ -26,6 +26,7 @@ export const MENUS = [
     ['/self-host', Server, 'Self-host guide', 'Run it with Docker in a few minutes'],
     ['/self-host#configuration', Settings2, 'Configuration', 'URL, email, sign-ups, proxies'],
     ['/security', ShieldCheck, 'Security and audit', 'What is recorded, and the known limits'],
+    ['/verify', FileSearch, 'Verify a document', 'Check a PDF against this server'],
     ['/self-host#licence', Scale, 'Open-source licence', 'AGPL-3.0: use, modify, self-host'],
     ['https://github.com/cre8ive-marketing/Countersign', FolderGit2, 'Source code', 'The Countersign repository on GitHub'],
   ] },

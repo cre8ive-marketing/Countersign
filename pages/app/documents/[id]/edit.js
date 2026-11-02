@@ -6,8 +6,9 @@ import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Send, Check, UserRound
 import { withUser } from '../../../../lib/auth';
 import { ownedDocument } from '../../../../lib/documents';
 import { mailEnabled } from '../../../../lib/mail';
-import { apiFetch, cleanOptions, FIELD_META, recipientColor } from '../../../../lib/client';
+import { apiFetch, cleanOptions, FIELD_META, recipientColor, redirectUrlError } from '../../../../lib/client';
 import { Button } from '../../../../components/ui';
+import ContactInput from '../../../../components/ContactInput';
 import PdfPages from '../../../../components/PdfPages';
 
 export const getServerSideProps = withUser(async (ctx, user) => {
@@ -19,7 +20,7 @@ export const getServerSideProps = withUser(async (ctx, user) => {
       mail: mailEnabled(),
       doc: {
         id: doc.id, title: doc.title, message: doc.message, sequential: !!doc.sequential, reminderDays: doc.reminder_days, isTemplate: !!doc.is_template,
-        requireOtp: !!doc.require_otp, expireDays: doc.expire_days ?? 0,
+        requireOtp: !!doc.require_otp, expireDays: doc.expire_days ?? 0, redirectUrl: doc.redirect_url ?? '',
       },
       initialRecipients: recipients.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role })),
       initialFields: fields.map((f) => ({ id: f.id, recipientId: f.recipient_id, type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, required: !!f.required, label: f.label, options: f.options })),
@@ -39,6 +40,8 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
   const [reminderDays, setReminderDays] = useState(doc.reminderDays);
   const [requireOtp, setRequireOtp] = useState(doc.requireOtp && mail);
   const [expireDays, setExpireDays] = useState(doc.expireDays);
+  const [redirectUrl, setRedirectUrl] = useState(doc.redirectUrl);
+  const [redirectTouched, setRedirectTouched] = useState(false);
   const [recipients, setRecipients] = useState(initialRecipients.length ? initialRecipients
     : [{ id: tempId(), name: '', email: '', role: 'signer' }]);
   const [fields, setFields] = useState(initialFields);
@@ -55,11 +58,14 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
   const selected = fields.find((f) => f.id === selectedId);
   const active = recipients.find((r) => r.id === activeId);
 
-  // Autosave the whole draft shortly after any change.
+  const redirectError = redirectUrlError(redirectUrl.trim());
+
+  // Autosave the whole draft shortly after any change. An address still being typed is left out so autosave does not fail on it.
   const payload = useMemo(() => ({
     title, message, sequential, reminderDays, requireOtp, expireDays, recipients,
+    ...(redirectError ? {} : { redirectUrl: redirectUrl.trim() }),
     fields: fields.map((f) => (FIELD_META[f.type].choices ? { ...f, options: cleanOptions(f.options) } : f)),
-  }), [title, message, sequential, reminderDays, requireOtp, expireDays, recipients, fields]);
+  }), [title, message, sequential, reminderDays, requireOtp, expireDays, redirectUrl, redirectError, recipients, fields]);
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
@@ -80,6 +86,7 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
   }
 
   async function send() {
+    if (redirectError) { setRedirectTouched(true); return setError(redirectError); }
     setError(null);
     setSending('send');
     try {
@@ -237,11 +244,18 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
                         <button className="icon-btn icon-btn-sm" onClick={() => removeRecipient(r.id)} aria-label={`Remove ${r.name || 'recipient'}`}><Trash2 size={14} /></button>
                       </div>
                     </div>
-                    <input className="input input-sm" placeholder={doc.isTemplate ? 'Role, e.g. Client' : 'Full name'} aria-label="Name" value={r.name}
-                      onChange={(e) => updateRecipient(r.id, { name: e.target.value })} onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
-                    {!doc.isTemplate && (
-                      <input className="input input-sm" type="email" placeholder="Email" aria-label="Email" value={r.email}
-                        onChange={(e) => updateRecipient(r.id, { email: e.target.value })} onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
+                    {doc.isTemplate ? (
+                      <input className="input input-sm" placeholder="Role, e.g. Client" aria-label="Name" value={r.name}
+                        onChange={(e) => updateRecipient(r.id, { name: e.target.value })} onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
+                    ) : (
+                      <>
+                        <ContactInput className="input input-sm" placeholder="Full name" aria-label="Name" value={r.name}
+                          onChange={(e) => updateRecipient(r.id, { name: e.target.value })} onPick={(c) => updateRecipient(r.id, { name: c.name, email: c.email })}
+                          onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
+                        <ContactInput className="input input-sm" type="email" placeholder="Email" aria-label="Email" value={r.email}
+                          onChange={(e) => updateRecipient(r.id, { email: e.target.value })} onPick={(c) => updateRecipient(r.id, { name: c.name, email: c.email })}
+                          onFocus={() => r.role === 'signer' && setActiveId(r.id)} />
+                      </>
                     )}
                   </li>
                 );
@@ -357,6 +371,15 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
                   <p className="field-hint">After this, signing links stop working and the document is marked expired.</p>
                 </div>
               )}
+              <div className="field">
+                <label htmlFor="redirect">After signing, send signers to</label>
+                <input id="redirect" className="input" type="url" inputMode="url" maxLength={500} placeholder="https://example.com/thanks" value={redirectUrl}
+                  aria-invalid={redirectTouched && redirectError ? true : undefined} aria-describedby="redirect-hint"
+                  onChange={(e) => setRedirectUrl(e.target.value)} onBlur={() => setRedirectTouched(true)} />
+                {redirectTouched && redirectError
+                  ? <p id="redirect-hint" className="field-error" role="alert">{redirectError}</p>
+                  : <p id="redirect-hint" className="field-hint">Optional. An https:// address. When they finish, signers see a button to continue there.</p>}
+              </div>
               <div className="field">
                 <label className="check">
                   <input type="checkbox" checked={requireOtp && mail} disabled={!mail} aria-describedby="otp-hint" onChange={(e) => setRequireOtp(e.target.checked)} />
