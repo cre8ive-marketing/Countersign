@@ -3,6 +3,8 @@ services:
     build: .
     ports: ["3000:3000"]
     volumes: ["countersign-data:/data"]
+    # Set ENCRYPTION_KEY in .env (see .env.example). Without it the key is generated inside the
+    # countersign-data volume, so a copy of the volume alone can decrypt every document.
     env_file:
       - path: .env
         required: false

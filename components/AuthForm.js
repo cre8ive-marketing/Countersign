@@ -19,6 +19,8 @@ export function safeNext(next) {
   }
 }
 
+const waitText = (s) => (s < 60 ? `${s} seconds` : `${Math.ceil(s / 60)} minute${Math.ceil(s / 60) === 1 ? '' : 's'}`);
+
 export default function AuthForm({ mode, closed }) {
   const router = useRouter();
   // ?email= comes from the landing page start form.
@@ -40,7 +42,7 @@ export default function AuthForm({ mode, closed }) {
       await apiFetch(`/api/auth/${mode}`, { body: form });
       router.push(safeNext(router.query.next));
     } catch (err) {
-      setError(err.message);
+      setError(err.status === 429 && err.retryAfter ? `Too many sign-in attempts. Try again in ${waitText(err.retryAfter)}.` : err.message);
       setBusy(false);
     }
   }
@@ -68,8 +70,8 @@ export default function AuthForm({ mode, closed }) {
               {error && <div ref={summary} className="error-summary" role="alert" tabIndex={-1}>{error}</div>}
               {isSignup && <TextField id="name" label="Full name" autoComplete="name" value={form.name} onChange={set('name')} required maxLength={120} />}
               <TextField id="email" type="email" label="Work email" autoComplete="email" value={form.email} onChange={set('email')} required />
-              <TextField id="password" type="password" label="Password" autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={isSignup ? 8 : undefined}
-                value={form.password} onChange={set('password')} required hint={isSignup ? 'At least 8 characters.' : undefined} />
+              <TextField id="password" type="password" label="Password" autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={isSignup ? 12 : undefined} maxLength={isSignup ? 256 : undefined}
+                value={form.password} onChange={set('password')} required hint={isSignup ? 'At least 12 characters.' : undefined} />
               <Button variant="primary" type="submit" loading={busy} className="btn-block">{isSignup ? 'Create account' : 'Sign in'}</Button>
             </form>
           )}

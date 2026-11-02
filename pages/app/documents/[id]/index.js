@@ -120,10 +120,12 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
                         {r.declined_reason && <p className="route-reason">“{r.declined_reason}”</p>}
                         {waiting && (
                           <div className="route-actions">
-                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => copyLink(r)}>
-                              {copied === r.id ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-                              {copied === r.id ? 'Copied' : 'Copy signing link'}
-                            </button>
+                            {r.token && (
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => copyLink(r)}>
+                                {copied === r.id ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+                                {copied === r.id ? 'Copied' : 'Copy signing link'}
+                              </button>
+                            )}
                             {mail && (
                               <button type="button" className="btn btn-secondary btn-sm" disabled={busy === r.id} onClick={() => run(r.id, () => apiFetch(`/api/documents/${doc.id}/remind`, { body: { recipientId: r.id } }), `Reminder sent to ${r.name}.`)}>
                                 <Bell size={13} aria-hidden="true" />Remind

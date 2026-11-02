@@ -11,7 +11,10 @@ const ENV = [
   ['APP_URL', 'request host', 'Public URL used in emailed links and reminders. https:// turns on Secure cookies. Required for automatic reminders.'],
   ['DATA_DIR', './data (/data in Docker)', 'Where the database and PDFs are stored.'],
   ['ALLOW_SIGNUP', 'false', 'The first account can always sign up. Set true to let anyone create an account.'],
-  ['TRUST_PROXY', 'false', 'Set true behind a reverse proxy so the audit trail records the client IP from X-Forwarded-For.'],
+  ['ENCRYPTION_KEY', 'generated file in DATA_DIR', '32-byte AES-256 key as 64 hex characters or base64. Encrypts every PDF and field value. Back it up; changing or losing it makes existing documents unreadable.'],
+  ['TRUST_PROXY', 'false', 'Set true behind a reverse proxy so the audit trail and sign-in limits use the client IP from X-Forwarded-For.'],
+  ['TOKEN_TTL_DAYS', '30', 'How long a signing link stays valid. Reminders extend it.'],
+  ['SESSION_IDLE_MINUTES, SESSION_MAX_DAYS', '60, 7', 'Sessions end after this much inactivity, or this long after sign-in.'],
   ['SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM', 'unset', 'Email delivery. Without SMTP, senders copy each signing link from the document page.'],
   ['PORT', '3000', 'HTTP port.'],
 ];
@@ -37,6 +40,7 @@ export default function SelfHost() {
           <h2 id="quick-start">Quick start</h2>
           <p>Get the source, copy the example settings, set <code>APP_URL</code>, then start the container.</p>
           <pre className="mk-pre"><code>{'git clone https://github.com/cre8ive-marketing/Countersign.git\ncd Countersign\ncp .env.example .env\ndocker compose up -d'}</code></pre>
+          <p>Before you store real documents, set your own encryption key: run <code>openssl rand -hex 32</code> and put the result in <code>ENCRYPTION_KEY</code> in <code>.env</code>. Without it, Countersign generates <code>encryption.key</code> inside the data volume, which does not protect against someone who has the whole volume. If you lose the key, every document is lost, so back it up separately from the data.</p>
           <p>Open your <code>APP_URL</code> and create the first account. Sign-ups close after the first account unless <code>ALLOW_SIGNUP=true</code>.</p>
           <figure className="code-window">
             <figcaption>docker-compose.yml with settings inline</figcaption>
@@ -46,7 +50,7 @@ export default function SelfHost() {
           <pre className="mk-pre"><code>{'npm ci\nnpm run build\nnpm start'}</code></pre>
 
           <h2 id="configuration">Configuration</h2>
-          <p>Only <code>APP_URL</code> matters for a first run.</p>
+          <p>Set <code>APP_URL</code> and <code>ENCRYPTION_KEY</code> before you store real documents.</p>
           <div className="mk-table-wrap">
             <table className="mk-table">
               <thead><tr><th scope="col">Variable</th><th scope="col">Default</th><th scope="col">What it does</th></tr></thead>
@@ -61,7 +65,7 @@ export default function SelfHost() {
           <p>Put Countersign behind Caddy, nginx or Traefik. Set <code>APP_URL=https://…</code> so cookies are marked Secure, and <code>TRUST_PROXY=true</code> so the audit trail records the real client IP.</p>
 
           <h2 id="backups">Backups</h2>
-          <p>All state lives in the data volume: <code>countersign.db</code> and the <code>files/</code> folder with original and signed PDFs. Stop the container, or use <code>sqlite3 .backup</code>, and copy the whole volume. Back up the database and the files together.</p>
+          <p>All state lives in the data volume: <code>countersign.db</code> and the <code>files/</code> folder with original and signed PDFs. Stop the container, or use <code>sqlite3 .backup</code>, and copy the whole volume. Back up the database and the files together, and keep a copy of the encryption key somewhere else: a backup without it cannot be restored.</p>
 
           <h2 id="upgrading">Upgrading</h2>
           <p>Back up the volume, pull the new version and rebuild. The database schema is created on start.</p>
@@ -72,7 +76,9 @@ export default function SelfHost() {
             <li>Signatures are electronic signatures with an audit trail, not certificate-based digital signatures. There is no PAdES or X.509 seal on the PDF.</li>
             <li>Text typed into fields supports Latin-1 characters only. Drawn and typed signatures are images and are not affected.</li>
             <li>Pages with a rotation flag are stamped as if unrotated.</li>
-            <li>Not built yet: bulk send, teams and roles, a REST API and webhooks, custom branding, signing link expiry and SSO.</li>
+            <li>Titles, names, email addresses and audit entries are not encrypted in the database.</li>
+            <li>No two-factor sign-in, email verification, encryption-key rotation or password reset yet.</li>
+            <li>Not built yet: bulk send, teams and roles, a REST API and webhooks, custom branding and SSO.</li>
           </ul>
 
           <h2 id="licence">Licence</h2>

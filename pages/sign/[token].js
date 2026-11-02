@@ -1,16 +1,25 @@
 import { useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { ArrowRight, Download, CircleCheck, Clock, Ban, Lock, X } from 'lucide-react';
-import { markViewed, recipientByToken } from '../../lib/documents';
+import { ArrowRight, Download, CircleCheck, Clock, Ban, Lock, Link2Off, X } from 'lucide-react';
+import { markViewed, signerByToken } from '../../lib/documents';
 import db from '../../lib/db';
 import { apiFetch, FIELD_META } from '../../lib/client';
 import { Button, Logo } from '../../components/ui';
 import PdfPages from '../../components/PdfPages';
 import SignaturePad from '../../components/SignaturePad';
 
-export async function getServerSideProps({ params, req }) {
-  const found = recipientByToken(params.token);
-  if (!found) return { notFound: true };
+export async function getServerSideProps({ params, req, res }) {
+  let found;
+  try {
+    found = signerByToken(params.token, req);
+    if (!found) throw Object.assign(new Error('Not found'), { status: 404 });
+  } catch (e) {
+    if (e.status !== 410 && e.status !== 404) throw e;
+    // A dead link gets a calm page with the right status code; the token is never sent back.
+    res.statusCode = e.status;
+    const state = e.status === 404 ? 'link-unknown' : /expired/i.test(e.message) ? 'link-expired' : 'link-invalid';
+    return { props: { token: null, state, doc: null, sender: null, me: null, fields: [] } };
+  }
   const { recipient: r, doc, fields } = found;
   if (doc.status === 'sent') markViewed(r, req);
   const sender = db.prepare('SELECT name, email FROM users WHERE id = ?').get(doc.owner_id);
@@ -42,7 +51,7 @@ export default function SignPage({ token, state: initialState, doc, sender, me, 
   const [state, setState] = useState(initialState);
   return (
     <div className="signer">
-      <Head><title>{`${doc.title} · Countersign`}</title><meta name="robots" content="noindex" /></Head>
+      <Head><title>{`${doc?.title ?? 'Signing link'} · Countersign`}</title><meta name="robots" content="noindex" /></Head>
       {state === 'sign'
         ? <Signing token={token} doc={doc} sender={sender} me={me} fields={fields} onDone={setState} />
         : <Status state={state} token={token} doc={doc} sender={sender} />}
@@ -51,26 +60,31 @@ export default function SignPage({ token, state: initialState, doc, sender, me, 
 }
 
 function Status({ state, token, doc, sender }) {
+  // Link-error states have no document or sender, and every body below is built eagerly.
+  const title = doc?.title, from = sender?.name;
   const content = {
-    completed: { icon: CircleCheck, tone: 'ok', title: 'Everyone has signed', body: `${doc.title} is complete. Download your copy with its certificate of completion.` },
-    waiting: { icon: Clock, tone: 'warn', title: 'You’re done', body: `Your signature is saved. We’ll let you know when everyone else has signed ${doc.title}.` },
-    queued: { icon: Clock, tone: 'neutral', title: 'Not your turn yet', body: `${sender.name} set a signing order. You’ll get an email when it’s your turn.` },
-    cc: { icon: Clock, tone: 'neutral', title: 'You’ll get a copy', body: `${sender.name} added you to receive ${doc.title} once everyone has signed.` },
-    voided: { icon: Ban, tone: 'bad', title: 'This document was voided', body: `${sender.name} cancelled ${doc.title}. Nothing more is needed from you.` },
-    declined: { icon: Ban, tone: 'bad', title: 'This document was declined', body: `Signing for ${doc.title} has stopped. ${sender.name} has been notified.` },
+    completed: { icon: CircleCheck, tone: 'ok', title: 'Everyone has signed', body: `${title} is complete. Download your copy with its certificate of completion.` },
+    waiting: { icon: Clock, tone: 'warn', title: 'You’re done', body: `Your signature is saved. We’ll let you know when everyone else has signed ${title}.` },
+    queued: { icon: Clock, tone: 'neutral', title: 'Not your turn yet', body: `${from} set a signing order. You’ll get an email when it’s your turn.` },
+    cc: { icon: Clock, tone: 'neutral', title: 'You’ll get a copy', body: `${from} added you to receive ${title} once everyone has signed.` },
+    voided: { icon: Ban, tone: 'bad', title: 'This document was voided', body: `${from} cancelled ${title}. Nothing more is needed from you.` },
+    declined: { icon: Ban, tone: 'bad', title: 'This document was declined', body: `Signing for ${title} has stopped. ${from} has been notified.` },
+    'link-expired': { icon: Clock, tone: 'neutral', title: 'This signing link has expired', body: 'Links stop working after a while to keep your documents safe. Ask the sender to send you a new link.' },
+    'link-invalid': { icon: Link2Off, tone: 'neutral', title: 'This signing link no longer works', body: 'The document may have been completed, cancelled or sent again. Ask the sender for a new link if you still need to sign.' },
+    'link-unknown': { icon: Link2Off, tone: 'neutral', title: 'We couldn’t find this signing link', body: 'Check that you opened the full link from your email, or ask the sender to send it again.' },
   }[state];
   const Icon = content.icon;
   return (
     <div className="status-page">
       <div className="status-card">
-        <Logo href="#" />
+        <Logo href={null} />
         <span className={`status-icon tone-${content.tone}`}><Icon size={22} strokeWidth={1.75} aria-hidden="true" /></span>
         <h1>{content.title}</h1>
         <p>{content.body}</p>
         {state === 'completed' && (
           <Button variant="primary" href={`/api/sign/${token}/file?download=1`}><Download size={16} aria-hidden="true" />Download signed PDF</Button>
         )}
-        <p className="status-foot"><Lock size={12} aria-hidden="true" />Sent by {sender.name} ({sender.email}) from a self-hosted Countersign server</p>
+        <p className="status-foot"><Lock size={12} aria-hidden="true" />{sender ? `Sent by ${sender.name} (${sender.email}) from a self-hosted Countersign server` : 'A self-hosted Countersign server'}</p>
       </div>
     </div>
   );
@@ -147,7 +161,7 @@ function Signing({ token, doc, sender, me, fields, onDone }) {
   return (
     <>
       <header className="signer-bar">
-        <Logo href="#" compact />
+        <Logo href={null} compact />
         <div className="signer-bar-title">
           <strong>{doc.title}</strong>
           <span>From {sender.name}</span>

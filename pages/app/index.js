@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { Upload, Search, ChevronRight, FileText, LayoutTemplate, PenLine } from 'lucide-react';
 import { withUser } from '../../lib/auth';
 import db from '../../lib/db';
+import { signingToken } from '../../lib/documents';
 import { apiFetch, relativeTime, recipientColor } from '../../lib/client';
 import AppShell from '../../components/AppShell';
 import { Avatar, Button, StatusBadge } from '../../components/ui';
@@ -22,10 +23,11 @@ export const getServerSideProps = withUser(async (ctx, user) => {
     WHERE owner_id = ? AND is_template = ? ORDER BY updated_at DESC`).all(user.id, isTemplates ? 1 : 0);
   const recips = db.prepare(`SELECT r.document_id, r.name, r.role, r.status, r.position FROM recipients r
     JOIN documents d ON d.id = r.document_id WHERE d.owner_id = ? ORDER BY r.position`).all(user.id);
-  // Documents on this server, from anyone, waiting on the signed-in user's own signature.
-  const action = db.prepare(`SELECT d.id, d.title, d.updated_at, r.token, u.name AS sender, d.owner_id = ? AS own FROM recipients r
-    JOIN documents d ON d.id = r.document_id JOIN users u ON u.id = d.owner_id
-    WHERE r.email = ? AND d.status = 'sent' AND r.status IN ('sent', 'viewed') ORDER BY d.updated_at DESC`).all(user.id, user.email.toLowerCase());
+  // Only the user's own documents where they are also a signer. Emails are unverified, so matching
+  // recipients by email across other owners would hand their signing links to anyone who signs up with that address.
+  const action = db.prepare(`SELECT r.*, d.title, d.updated_at AS doc_updated_at FROM recipients r
+    JOIN documents d ON d.id = r.document_id
+    WHERE d.owner_id = ? AND r.email = ? AND d.status = 'sent' AND r.status IN ('sent', 'viewed') ORDER BY d.updated_at DESC`).all(user.id, user.email.toLowerCase());
 
   const byDoc = {};
   for (const r of recips) (byDoc[r.document_id] ??= []).push({ name: r.name, role: r.role, status: r.status, position: r.position });
@@ -34,7 +36,9 @@ export const getServerSideProps = withUser(async (ctx, user) => {
       user,
       isTemplates,
       docs: docs.map((d) => ({ ...d, recipients: byDoc[d.id] ?? [] })),
-      action: action.map((a) => ({ ...a, own: Boolean(a.own) })),
+      // Rows whose link is expired or revoked have no token and are left out.
+      action: action.map((a) => ({ id: a.document_id, title: a.title, updated_at: a.doc_updated_at, token: signingToken(a) }))
+        .filter((a) => a.token),
     },
   };
 });
@@ -130,14 +134,14 @@ export default function Documents({ user, isTemplates, docs, action }) {
                 <li key={a.id}>
                   <Link href={`/sign/${a.token}`} className="doc-row">
                     <span className="doc-icon is-action"><PenLine size={16} strokeWidth={1.75} aria-hidden="true" /></span>
-                    <span className="doc-main"><strong>{a.title}</strong><span>{a.own ? 'Sent by you' : `From ${a.sender}`}</span></span>
+                    <span className="doc-main"><strong>{a.title}</strong><span>Sent by you</span></span>
                     <span className="doc-meta">{relativeTime(a.updated_at)}</span>
                     <span className="btn btn-accent btn-sm">Sign</span>
                   </Link>
                 </li>
               ))}
             </ul>
-          ) : <Empty title="Nothing to sign" body="When someone on this server sends you a document, it shows up here." />
+          ) : <Empty title="Nothing to sign" body="Documents you send with yourself as a signer show up here. Documents from other people arrive by email." />
         ) : filtered.length ? (
           <ul className="doc-list">
             {filtered.map((d) => <DocRow key={d.id} doc={d} isTemplate={isTemplates} onUse={() => useTemplate(d.id)} />)}

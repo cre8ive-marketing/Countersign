@@ -1,16 +1,19 @@
 import Link from 'next/link';
 import { DOC_STATUS } from '../lib/client';
 
+// Pass href={null} for a plain brand mark (no link), e.g. on signer pages where "home" is not the signer's.
 export function Logo({ href = '/', compact = false }) {
+  const Tag = href ? Link : 'span';
+  const a11y = href ? { href, 'aria-label': 'Countersign home' } : compact ? { role: 'img', 'aria-label': 'Countersign' } : {};
   return (
-    <Link href={href} className="logo" aria-label="Countersign home">
+    <Tag className="logo" {...a11y}>
       <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
         <rect x="1" y="1" width="20" height="20" rx="6" fill="var(--ink)" />
         <path d="M6 13.6c1.6-3.8 3-5.6 4.1-5.6 1.4 0 .1 5.2 1.4 5.2 1 0 1.6-2.7 2.6-2.7.8 0 .9 1.6 1.9 1.6" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M6 16h10" stroke="var(--accent-on-ink)" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
       {!compact && <span>Countersign</span>}
-    </Link>
+    </Tag>
   );
 }
 

@@ -1,10 +1,7 @@
 node_modules
 .next
 data
-.env
-.git
-.claude
-.agents
-.impeccable
+# every hidden file and folder (env files, git, local tooling)
+.*
 test
 docs/shots-profile

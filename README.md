@@ -55,7 +55,7 @@ Save a document with fields placed for roles like *Client* and *Agency*. Reuse i
 <td width="50%" valign="top">
 
 ### Sign
-A guided walkthrough jumps from field to field. Signers **type or draw** a signature once and reuse it everywhere. Works with a mouse, trackpad, finger or keyboard, and on small phones.
+A guided walkthrough jumps from field to field. Signers **type** a signature in one of five handwriting styles, **draw** it, or **upload** a photo or scan of their own (the background is removed in the browser). They adopt it once and reuse it everywhere. Works with a mouse, trackpad, finger or keyboard, and on small phones.
 
 ### Finish
 When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail.
@@ -93,7 +93,10 @@ docker compose up -d
 
 Open `http://localhost:3000` and create the first account. Sign-ups close after that unless `ALLOW_SIGNUP=true`.
 
-All state lives in the `countersign-data` volume (`/data` in the container): `countersign.db` (SQLite) and `files/` (original and signed PDFs).
+All state lives in the `countersign-data` volume (`/data` in the container): `countersign.db` (SQLite) and `files/` (original and signed PDFs, encrypted).
+
+> [!IMPORTANT]
+> Every PDF and every signature is encrypted with AES-256. Set your own key before you store real documents: `openssl rand -hex 32` and put the result in `ENCRYPTION_KEY` in `.env`. Without it, Countersign generates `encryption.key` inside the data volume, which keeps backups of the files alone unreadable but does not protect against someone who has the whole volume. **If you lose the key, every document is lost.** Back it up separately from the data.
 
 ### Without Docker
 
@@ -114,15 +117,21 @@ Data goes to `./data` unless `DATA_DIR` is set.
 | `APP_URL` | request host | Public URL used in emailed links, reminders, `robots.txt` and `sitemap.xml`. `https://` turns on Secure cookies. Required for automatic reminders. |
 | `DATA_DIR` | `./data` (`/data` in Docker) | Where the database and PDFs are stored. |
 | `ALLOW_SIGNUP` | `false` | The first account can always sign up. Set `true` to let anyone create an account. |
-| `TRUST_PROXY` | `false` | Set `true` behind a reverse proxy so the audit trail records the client IP from `X-Forwarded-For`. |
+| `ENCRYPTION_KEY` | generated file in `DATA_DIR` | 32-byte AES-256 key as 64 hex characters or base64. Encrypts every PDF and field value. Back it up; changing or losing it makes existing documents unreadable. |
+| `TRUST_PROXY` | `false` | Set `true` behind a reverse proxy so the audit trail and login limits use the client IP from `X-Forwarded-For`. Leave it off when clients connect directly. |
+| `TOKEN_TTL_DAYS` | `30` | How long a signing link stays valid. Reminders and a signer's turn coming up extend it. |
+| `SESSION_IDLE_MINUTES` `SESSION_MAX_DAYS` | `60`, `7` | Sign-in sessions end after this much inactivity, or this long after sign-in. |
+| `LOGIN_MAX_ATTEMPTS` `LOGIN_IP_MAX_ATTEMPTS` | `5`, `50` | Failed sign-ins allowed per account from one address, and per address, within 15 minutes before a 15-minute lock. |
+| `SIGNUP_MAX_PER_HOUR` | `10` | Sign-up attempts allowed per address per hour while sign-ups are open. |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | unset | Email delivery. Without SMTP, senders copy each signing link from the document page. **Set `APP_URL` too:** emails are not sent without it, because links built from the request's host could be forged. |
 | `PORT` | `3000` | HTTP port. |
 
 ## Operating it
 
 - **HTTPS:** run it behind Caddy, nginx or Traefik, set `APP_URL=https://…` and `TRUST_PROXY=true`, and add HSTS at the proxy. Forwarded headers are ignored unless `TRUST_PROXY=true`. If your proxy rewrites the `Host` header and you leave it off, form submissions are rejected as cross-origin.
-- **Backups:** stop the container (or use `sqlite3 .backup`) and copy the whole data volume. The database and `files/` must be backed up together.
-- **Upgrades:** `git pull && docker compose up -d --build`. The schema is created and extended on start.
+- **Backups:** stop the container (or use `sqlite3 .backup`) and copy the whole data volume. The database and `files/` must be backed up together. Back up the encryption key separately; a backup without it cannot be restored.
+- **Upgrades:** `git pull && docker compose up -d --build`. The schema is created and extended on start. Existing unencrypted documents are encrypted once on the first start after upgrading.
+- **Security logs:** sign-ins, failed sign-ins, lockouts, password changes, expired links and file integrity failures are stored in the database and printed to stdout as JSON lines (`{"security_event": …}`, `{"audit_head": …}`). Ship stdout to your log system; the `audit_head` lines let you detect if recent audit events are later removed from the database.
 
 ## How it works
 
@@ -149,17 +158,24 @@ flowchart LR
 
 ## Security model
 
-- Passwords are hashed with scrypt. Sessions are opaque `HttpOnly; SameSite=Lax` cookies, `Secure` on https.
-- Every state-changing request is checked for same origin. Every document read or write checks ownership on the server.
-- Signers use an unguessable per-recipient link. They can only see their own fields, and only when it is their turn.
-- The original PDF is never modified. The signed copy is a separate file, and both SHA-256 hashes are recorded.
-- Every action (upload, send, email, view, sign, decline, void, reminder) is written to the audit trail with time, IP and browser.
+- **Encryption at rest:** every PDF and every field value (signatures, initials, text) is encrypted with AES-256-GCM, bound to its document or field so files can't be swapped. Every download and every stamping run also checks the file against its recorded SHA-256 and refuses a mismatch.
+- **Accounts:** passwords (at least 12 characters) are hashed with scrypt. Sessions are opaque `HttpOnly; SameSite=Lax` cookies, `Secure` on https, stored only as hashes, and end after inactivity or a maximum age. Changing your password signs out your other devices, and *Sign out of all devices* ends every session.
+- **Sign-in abuse:** failed sign-ins are limited per account and address with temporary locks, and responses take the same time whether or not the account exists.
+- **Signing links:** each signer gets an unguessable link, stored only as a hash plus an encrypted copy. Links expire, and voiding or declining a document revokes them. Signers see only their own fields, and only when it is their turn.
+- **Requests:** every state-changing request is checked for same origin, and every document read or write checks ownership on the server.
+- **Audit trail:** every action (upload, send, email, view, sign, decline, void, reminder) is recorded with time, IP and browser. Entries form a keyed hash chain per document. The certificate prints the chain head, the completion entry records both PDF hashes, and deleting a document keeps an encrypted record of its trail.
+
+### Standards and audits
+
+Countersign is software you run, so it can't hold certifications itself. ISO/IEC 27001, SOC 1 and SOC 2 (SSAE 18), CSA STAR and APEC PRP assess the **organisation** that operates a service. Countersign provides technical controls an operator can point to in those audits: encryption at rest, access control, session and sign-in protection, a tamper-evident audit trail and security event logs. Policies, risk assessment, access reviews, backups, monitoring, incident response and the audit itself remain the operator's job. Countersign stores no payment card data, so PCI DSS does not apply to it. The control-by-control mapping, including what is only partly covered, is in [`docs/security/control-mapping.md`](docs/security/control-mapping.md). Countersign makes no compliance or certification claims.
 
 **Known limits**
-- These are electronic signatures with an audit trail. They are not certificate-based digital signatures (no PAdES/X.509 seal). Check what your documents and jurisdiction require. Countersign makes no compliance or legal-validity claims.
-- Signing links do not expire yet, and login is not rate-limited. Put the service behind your own proxy if it faces the internet.
+- These are electronic signatures with an audit trail. They are not certificate-based digital signatures (no PAdES/X.509 seal). Check what your documents and jurisdiction require. Countersign makes no legal-validity claims.
+- Titles, names, email addresses and audit entries are not encrypted in the database, so the dashboard can list and search them. Protect the data volume with disk encryption and access control.
+- Someone with write access to the database and the encryption key can still rewrite history. Ship the stdout logs off the server to keep an independent record.
+- No two-factor sign-in, email verification or encryption-key rotation yet.
 - Text typed into fields supports Latin-1 characters only (Devanagari or CJK print as `?`). Signatures are images and are not affected.
-- Not built yet: bulk send, teams and roles, a REST API and webhooks, custom branding, signing-link expiry, SSO.
+- Not built yet: bulk send, teams and roles, a REST API and webhooks, custom branding, SSO.
 
 Found a vulnerability? Please report it privately to the maintainers instead of opening a public issue.
 

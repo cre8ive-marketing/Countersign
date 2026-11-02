@@ -35,7 +35,7 @@ Sizes: `sm` 36px (40px hit area), default 40px, `lg` 48px; under 860px default i
 ## Type
 
 - Headings: **Lexend** 600, tight tracking. Body: **Source Sans 3**, 16px base, line-height 1.5. Both are self-hosted through `next/font`.
-- Mono (Geist Mono) only for commands, hashes and IDs. Mrs Saint Delafield is used only for signatures.
+- Mono (Geist Mono) only for commands, hashes and IDs. Signature faces are used only for signatures: Mrs Saint Delafield (default, global, also the marketing demo), plus Great Vibes, Allura, Dancing Script and Caveat, which are declared in `components/SignaturePad.js` so only the signing page ships them.
 
 ## Space, shape, depth
 

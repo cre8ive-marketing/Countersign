@@ -16,7 +16,7 @@ const SECTIONS = [
     'No email server? Copy each private signing link and send it yourself',
   ]],
   ['signer', 'A signer view that needs no instructions.', 'Signers open a private link. No account, no download. A guided button takes them to the next field until the document is done.', [
-    'Type or draw a signature; typing is always available',
+    'Type a signature in one of five handwriting styles, draw it, or upload your own',
     'Adopt a signature once and apply it to every signature field',
     'Works on phones and by keyboard',
   ]],
@@ -33,6 +33,7 @@ const SECTIONS = [
     'Signers, emails, view and sign times, and each signature',
     'The full audit trail with the time of each event, and the IP address for actions taken in a browser',
     'The SHA-256 fingerprint of the original document',
+    'A tamper-evident hash chain of events, with its head printed on the certificate',
   ]],
 ];
 

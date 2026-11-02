@@ -8,7 +8,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test test/flow.test.mjs test/marketing.test.mjs test/security/"
+    "test": "node --test --test-concurrency=1 test/flow.test.mjs test/marketing.test.mjs test/encryption.test.mjs test/p0.test.mjs test/security/"
   },
   "dependencies": {
     "lucide-react": "1.66.0",

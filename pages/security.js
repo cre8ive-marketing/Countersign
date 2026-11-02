@@ -18,11 +18,19 @@ const EVENTS = [
 ];
 
 const GAPS = [
-  'Signing links do not expire, and the tokens behind them are stored in plain text in the database. Anyone holding a link can open that recipient’s signing page.',
-  'There is no limit on repeated sign-in attempts and no password reset yet.',
+  'Titles, names, email addresses and audit entries are not encrypted in the database, so the dashboard can list and search them. Protect the data volume with disk encryption and access control.',
+  'Someone with write access to the database and the encryption key can still rewrite history. Ship the server’s logs off the machine to keep an independent record.',
+  'There is no two-factor sign-in, email verification, encryption-key rotation or password reset yet.',
   'The Content-Security-Policy is partial: framing, base URL, form targets and plugins are locked down, while the script and style policy runs in report-only mode for now.',
-  'Audit events are stored in order but are not hash-chained, so the log itself is not tamper-evident.',
   'There is no PAdES or X.509 seal on the signed PDF.',
+];
+
+const CONTROLS = [
+  'Encryption at rest for every PDF and field value',
+  'Per-account access control, checked on the server',
+  'Session timeouts, sign-in limits and sign out of all devices',
+  'A tamper-evident audit trail for every document',
+  'Security event logs you can ship to your own log system',
 ];
 
 export default function Security() {
@@ -41,6 +49,7 @@ export default function Security() {
           <div>
             <h2 id="events-h" className="lp-h2">Every action is an audit event.</h2>
             <p className="mk-row-body">Each event stores the time, the person, the action and, for actions taken in a browser, the IP address and browser. Behind a proxy, set <code>TRUST_PROXY=true</code> so the real client IP is recorded.</p>
+            <p className="mk-row-body">Events form a keyed hash chain per document, so a changed or removed entry breaks the chain. The chain head is printed on the certificate. Signing links expire, and voiding or declining a document revokes them.</p>
           </div>
           <div className="mk-table-wrap">
             <table className="mk-table">
@@ -61,6 +70,7 @@ export default function Security() {
               <li><CircleCheck size={18} aria-hidden="true" />The SHA-256 fingerprint of the original PDF</li>
               <li><CircleCheck size={18} aria-hidden="true" />Each signer, their email, view and sign times and signature</li>
               <li><CircleCheck size={18} aria-hidden="true" />The audit trail with times, and IP addresses for actions taken in a browser</li>
+              <li><CircleCheck size={18} aria-hidden="true" />The head of the audit hash chain and the number of events</li>
             </ul>
             <p className="mk-row-body">The SHA-256 of the finished signed PDF is stored too and shown on the sender’s document page.</p>
           </div>
@@ -87,7 +97,9 @@ export default function Security() {
           <div className="mk-prose">
             <ul>
               <li>Documents, signatures and the database live in one data volume on the server you run. Countersign sends nothing to any outside service except the SMTP server you configure.</li>
-              <li>Accounts sign in with an email and password. Passwords are hashed with scrypt, and sessions use an HttpOnly, SameSite cookie, marked Secure when <code>APP_URL</code> is https.</li>
+              <li>Every PDF and every signature, initial and field value is encrypted with AES-256-GCM, bound to its own document or field so files can’t be swapped. Every download is checked against its recorded SHA-256 fingerprint and refused if it doesn’t match.</li>
+              <li>You hold the key. Set <code>ENCRYPTION_KEY</code> and back it up separately from the data: losing it means losing every document.</li>
+              <li>Accounts sign in with an email and a password of at least 12 characters, hashed with scrypt. Sessions use an HttpOnly, SameSite cookie, marked Secure when <code>APP_URL</code> is https, and end after inactivity or a maximum age. Repeated failed sign-ins lock temporarily.</li>
               <li>Each account sees only its own documents. Signers have no account; each gets a private link for their own fields only.</li>
               <li>Cross-site browser requests are rejected, and every check happens on the server.</li>
             </ul>
@@ -105,7 +117,18 @@ export default function Security() {
         </div>
       </section>
 
-      <section className="mk-row" aria-labelledby="legal-h">
+      <section className="mk-row" aria-labelledby="audits-h">
+        <div className="lp-wrap lp-split">
+          <h2 id="audits-h" className="lp-h2">Standards and audits.</h2>
+          <div className="mk-prose">
+            <p>Countersign is software you run, so it can’t be certified itself. ISO/IEC 27001, SOC 1 and SOC 2 (SSAE 18), CSA STAR and APEC PRP assess the organisation that operates a service. Countersign supplies technical controls you can cite in those audits:</p>
+            <ul>{CONTROLS.map((c) => <li key={c}>{c}</li>)}</ul>
+            <p>Policies, risk assessment, monitoring, incident response and the audit itself stay with you as the operator. Countersign stores no payment card data, so PCI DSS does not apply. See the <a href="https://github.com/cre8ive-marketing/Countersign/blob/main/docs/security/control-mapping.md">control-by-control mapping</a>, including what is only partly covered.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mk-row lp-muted" aria-labelledby="legal-h">
         <div className="lp-wrap lp-split">
           <h2 id="legal-h" className="lp-h2">What a signature here means.</h2>
           <div className="mk-prose">

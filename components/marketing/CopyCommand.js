@@ -21,6 +21,8 @@ export const COMPOSE = `services:
     volumes: ["countersign-data:/data"]
     environment:
       APP_URL: https://sign.example.com
+      # Your AES-256 key (openssl rand -hex 32). Back it up separately.
+      ENCRYPTION_KEY: \${ENCRYPTION_KEY}
       # Optional: email links and reminders
       SMTP_HOST: smtp.example.com
       SMTP_USER: sign@example.com

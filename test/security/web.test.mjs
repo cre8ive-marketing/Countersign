@@ -28,7 +28,7 @@ const json = (o, extra = {}) => ({ headers: { 'Content-Type': 'application/json'
 
 async function owner() {
   const email = `sec-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const r = await raw('/api/auth/signup', { method: 'POST', ...json({ name: 'Sec Owner', email, password: 'correct horse' }) });
+  const r = await raw('/api/auth/signup', { method: 'POST', ...json({ name: 'Sec Owner', email, password: 'correct horse battery' }) });
   assert.equal(r.status, 200);
   return { email, cookie: r.headers['set-cookie'][0].split(';')[0] };
 }

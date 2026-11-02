@@ -394,8 +394,20 @@ button.sfield.is-filled:hover { background: rgba(58, 80, 107, 0.1); }
 .segmented button.is-active { background: var(--color-card); color: var(--color-foreground); box-shadow: var(--shadow-sm); }
 .sigpad-type { display: grid; gap: 12px; }
 .sigpad-preview, .sigpad-draw { position: relative; height: 132px; border: 1px solid var(--color-border-soft); border-radius: var(--radius); background: var(--color-background); overflow: hidden; }
-.sigpad-preview { display: flex; align-items: center; padding: 0 24px; }
-.sigpad-preview span { font-family: var(--font-script), cursive; font-size: 50px; line-height: 1.2; color: var(--brand-navy); white-space: nowrap; overflow: hidden; }
+.sigpad-preview { display: flex; align-items: center; justify-content: center; padding: 12px 24px; }
+.sigpad-image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sigpad-empty { font-size: 15px; color: var(--color-muted-foreground); text-align: center; }
+.sigfonts { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.sigfonts legend { padding: 0; margin-bottom: 6px; font-size: 14px; font-weight: 600; color: var(--color-muted-foreground); }
+.sigfont { display: flex; align-items: center; min-width: 0; height: 60px; padding: 0 16px; border: 1px solid var(--color-border-soft); border-radius: var(--radius); background: var(--color-card); cursor: pointer; transition: border-color var(--dur), background-color var(--dur), box-shadow var(--dur); }
+.sigfont:hover { border-color: var(--color-border-strong); }
+.sigfont:has(input:checked) { border-color: var(--brand-slate); background: var(--color-info-soft); box-shadow: inset 0 0 0 1px var(--brand-slate); }
+.sigfont:has(input:focus-visible) { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+.sigfont span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.6; color: var(--brand-navy); }
+.sigpad-upload { display: grid; gap: 12px; }
+.sigpad-upload-row { display: flex; }
+.sigpad-note { display: flex; align-items: flex-start; gap: 6px; margin-top: calc(var(--space-sm) - var(--space-md)); font-size: 14px; color: var(--color-muted-foreground); }
+.sigpad-note svg { flex: none; margin-top: 3px; }
 .sigpad-draw canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 .sigpad-baseline { position: absolute; left: 24px; right: 24px; bottom: 32px; border-bottom: 1px dashed var(--color-border); pointer-events: none; }
 .sigpad-clear { position: absolute; top: 8px; right: 12px; }
