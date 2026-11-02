@@ -20,7 +20,7 @@ const FACTS = [
 
 const STEPS = [
   [Upload, 'Upload', 'Drop in any PDF: contracts, NDAs, proposals, onboarding forms.'],
-  [MousePointerClick, 'Place fields', 'Click to place signature, initials, date, name, text and checkbox fields for each person.'],
+  [MousePointerClick, 'Place fields', 'Click to place signature, initials, date, text, number, dropdown, checkbox and other fields for each person.'],
   [Send, 'Send', 'Everyone gets a private link. Sign at once or in a set order, with automatic reminders.'],
   [CircleCheck, 'Done', 'A flattened, signed PDF with a certificate of completion for every party.'],
 ];

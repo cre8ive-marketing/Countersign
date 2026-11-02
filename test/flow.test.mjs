@@ -86,7 +86,9 @@ test('upload, route to two signers in order, sign, complete', async () => {
   // Signed PDF has the original pages plus a certificate page
   const signed = await call(`/api/documents/${id}/file?kind=signed`, { method: 'GET' });
   assert.equal(signed.status, 200);
-  assert.equal((await PDFDocument.load(signed.data)).getPageCount(), 3);
+  // The certificate can span pages (seal block, long audit trail): 2 original pages + at least 1.
+  const pages = (await PDFDocument.load(signed.data)).getPageCount();
+  assert.ok(pages >= 2 + 1, `page count ${pages}`);
 
   // Another user cannot read the document
   const other = client();

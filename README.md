@@ -43,10 +43,10 @@ Most teams only need the core of an e-signature product: send a PDF, collect sig
 <td width="50%" valign="top">
 
 ### Prepare
-Upload any PDF and click to place **signature, initials, date signed, full name, email, text and checkbox** fields. Drag to move, resize from the corner, nudge with the arrow keys. Each recipient gets their own colour.
+Upload any PDF and click to place **signature, initials, stamp, date signed, full name, email, company, job title, text, number, checkbox, dropdown and radio** fields. Drag to move, resize from the corner, nudge with the arrow keys. Each recipient gets their own colour.
 
 ### Route
-Any number of signers, plus people who only receive a copy. Sign **in parallel or in a set order**; the next person is notified the moment the previous one finishes. Add a message and automatic email reminders.
+Any number of signers, plus people who only receive a copy. Sign **in parallel or in a set order**; the next person is notified the moment the previous one finishes. Add a message and automatic email reminders, set the document to **expire** after a number of days, and optionally require each signer to enter a **one-time code** emailed to them before they can see or sign it. Or **sign it yourself** with no one else involved.
 
 ### Templates
 Save a document with fields placed for roles like *Client* and *Agency*. Reuse it and only type names and emails.
@@ -58,7 +58,7 @@ Save a document with fields placed for roles like *Client* and *Agency*. Reuse i
 A guided walkthrough jumps from field to field. Signers **type** a signature in one of five handwriting styles, **draw** it, or **upload** a photo or scan of their own (the background is removed in the browser). They adopt it once and reuse it everywhere. Works with a mouse, trackpad, finger or keyboard, and on small phones.
 
 ### Finish
-When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail.
+When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail. The finished PDF then gets a **digital seal** (a PKCS#7 signature over the whole file), so PDF readers can show whether it was changed afterwards.
 
 ### Manage
 A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time.
@@ -124,6 +124,7 @@ Data goes to `./data` unless `DATA_DIR` is set.
 | `LOGIN_MAX_ATTEMPTS` `LOGIN_IP_MAX_ATTEMPTS` | `5`, `50` | Failed sign-ins allowed per account from one address, and per address, within 15 minutes before a 15-minute lock. |
 | `SIGNUP_MAX_PER_HOUR` | `10` | Sign-up attempts allowed per address per hour while sign-ups are open. |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | unset | Email delivery. Without SMTP, senders copy each signing link from the document page. **Set `APP_URL` too:** emails are not sent without it, because links built from the request's host could be forged. |
+| `SIGNING_P12_BASE64` `SIGNING_P12_PASSPHRASE` | unset | Your own certificate (PKCS#12, base64) for the digital seal on completed PDFs. Without it, Countersign generates a self-signed one once and stores it encrypted as `signing.p12` in `DATA_DIR`. An invalid or expired certificate stops the server at startup. |
 | `PORT` | `3000` | HTTP port. |
 
 ## Operating it
@@ -162,6 +163,9 @@ flowchart LR
 - **Accounts:** passwords (at least 12 characters) are hashed with scrypt. Sessions are opaque `HttpOnly; SameSite=Lax` cookies, `Secure` on https, stored only as hashes, and end after inactivity or a maximum age. Changing your password signs out your other devices, and *Sign out of all devices* ends every session.
 - **Sign-in abuse:** failed sign-ins are limited per account and address with temporary locks, and responses take the same time whether or not the account exists.
 - **Signing links:** each signer gets an unguessable link, stored only as a hash plus an encrypted copy. Links expire, and voiding or declining a document revokes them. Signers see only their own fields, and only when it is their turn.
+- **Email codes (optional per document):** the signer must enter a 6-digit code sent to their address before the page shows the document, its fields or the file. Codes last 10 minutes, allow 5 tries, and are stored only as keyed hashes; a verified browser gets a 12-hour `HttpOnly` cookie for that signer only. A code shows access to the inbox, not who someone is. Needs SMTP and `APP_URL`.
+- **Digital seal:** the completed PDF is signed with a certificate so any later change is detectable. A self-signed seal does not identify a person or company, and PDF readers may show its signer as unverified; use your own certificate if that matters.
+- **Expiry:** past its expiry date a document can no longer be viewed, signed or declined, and its links are revoked.
 - **Requests:** every state-changing request is checked for same origin, and every document read or write checks ownership on the server.
 - **Audit trail:** every action (upload, send, email, view, sign, decline, void, reminder) is recorded with time, IP and browser. Entries form a keyed hash chain per document. The certificate prints the chain head, the completion entry records both PDF hashes, and deleting a document keeps an encrypted record of its trail.
 
@@ -170,7 +174,7 @@ flowchart LR
 Countersign is software you run, so it can't hold certifications itself. ISO/IEC 27001, SOC 1 and SOC 2 (SSAE 18), CSA STAR and APEC PRP assess the **organisation** that operates a service. Countersign provides technical controls an operator can point to in those audits: encryption at rest, access control, session and sign-in protection, a tamper-evident audit trail and security event logs. Policies, risk assessment, access reviews, backups, monitoring, incident response and the audit itself remain the operator's job. Countersign stores no payment card data, so PCI DSS does not apply to it. The control-by-control mapping, including what is only partly covered, is in [`docs/security/control-mapping.md`](docs/security/control-mapping.md). Countersign makes no compliance or certification claims.
 
 **Known limits**
-- These are electronic signatures with an audit trail. They are not certificate-based digital signatures (no PAdES/X.509 seal). Check what your documents and jurisdiction require. Countersign makes no legal-validity claims.
+- These are electronic signatures with an audit trail and a document seal. The seal is not a qualified or advanced signature of each signer, and it has no trusted timestamp (not PAdES-B-T/LTV). Sealing re-saves the PDF, so signatures already inside an uploaded PDF stop validating. Check what your documents and jurisdiction require. Countersign makes no legal-validity claims.
 - Titles, names, email addresses and audit entries are not encrypted in the database, so the dashboard can list and search them. Protect the data volume with disk encryption and access control.
 - Someone with write access to the database and the encryption key can still rewrite history. Ship the stdout logs off the server to keep an independent record.
 - No two-factor sign-in, email verification or encryption-key rotation yet.
@@ -187,7 +191,7 @@ npm run dev                               # http://localhost:3000
 node scripts/sample-pdf.mjs sample.pdf    # a two-page NDA to try the editor with
 ```
 
-`npm test` runs the end-to-end signing flow over HTTP against a running server. Point `BASE_URL` at it (default `http://localhost:3000`) and start that server with `ALLOW_SIGNUP=true` and a throwaway `DATA_DIR`.
+`npm test` runs the end-to-end tests over HTTP against a running server. Start that server with `ALLOW_SIGNUP=true`, `SIGNUP_MAX_PER_HOUR=1000`, a throwaway `DATA_DIR` and an explicit `ENCRYPTION_KEY`, and give the test process `BASE_URL` plus the same `DATA_DIR` and `ENCRYPTION_KEY` (and `SERVER_LOG` pointing at the server's stdout log). Tests that need those, or SMTP, skip themselves when they are missing.
 
 ```
 pages/            UI routes and API routes (pages/api)

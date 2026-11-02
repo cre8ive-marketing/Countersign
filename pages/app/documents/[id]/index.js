@@ -72,6 +72,8 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
             <div className="title-row"><h1>{doc.title}</h1><StatusBadge status={doc.status} /></div>
             <p className="page-sub">
               Sent {formatDate(doc.sent_at, true)}{completed && ` · Completed ${formatDate(doc.completed_at, true)}`}
+              {doc.expires_at && !completed && ` · ${doc.status === 'expired' ? 'Expired' : 'Expires'} ${formatDate(doc.expires_at, true)}`}
+              {!!doc.require_otp && ' · Signers confirm an email code before signing'}
             </p>
           </div>
           <div className="head-actions">
@@ -82,7 +84,7 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
               router.push(`/app/documents/${id}/edit`);
             })} loading={busy === 'tpl'}><LayoutTemplate size={16} aria-hidden="true" />Save as template</Button>
             {doc.status === 'sent' && <Button variant="danger" onClick={() => voidDialog.current.showModal()}><Ban size={16} aria-hidden="true" />Void</Button>}
-            {(doc.status === 'voided' || doc.status === 'declined') && (
+            {['voided', 'declined', 'expired'].includes(doc.status) && (
               <Button variant="danger" loading={busy === 'del'} onClick={() => confirm('Delete this document and its audit trail?') && run('del', async () => {
                 await apiFetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
                 router.push('/app');

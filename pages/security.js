@@ -7,11 +7,13 @@ const EVENTS = [
   ['Uploaded', 'The sender added the PDF'],
   ['Sent', 'The document went out to its signers'],
   ['Emailed / Ready to sign', 'A signer’s link was emailed, or made ready to copy'],
+  ['Email code sent / Email verified', 'A signer asked for a one-time code, and entered it correctly'],
   ['Viewed', 'A signer opened their link'],
   ['Signed', 'A signer finished their fields'],
   ['Declined', 'A signer declined, with their reason'],
   ['Reminded / Reminder sent', 'A reminder went out, by hand or on schedule'],
   ['Voided', 'The sender cancelled the document, with a reason'],
+  ['Expired', 'The document passed its expiry date before everyone signed'],
   ['Template created', 'A document was saved as a template'],
   ['Created from template', 'A new document was started from a template'],
   ['Completed', 'Everyone signed and the final PDF was built'],
@@ -22,7 +24,8 @@ const GAPS = [
   'Someone with write access to the database and the encryption key can still rewrite history. Ship the server’s logs off the machine to keep an independent record.',
   'There is no two-factor sign-in, email verification, encryption-key rotation or password reset yet.',
   'The Content-Security-Policy is partial: framing, base URL, form targets and plugins are locked down, while the script and style policy runs in report-only mode for now.',
-  'There is no PAdES or X.509 seal on the signed PDF.',
+  'The PDF seal uses a self-signed certificate unless you install your own, so PDF readers show its signer as unverified. It proves the file has not changed since completion, not who anyone is.',
+  'An email code shows that the signer could read that inbox at that moment. It does not verify who they are.',
 ];
 
 const CONTROLS = [
@@ -49,7 +52,8 @@ export default function Security() {
           <div>
             <h2 id="events-h" className="lp-h2">Every action is an audit event.</h2>
             <p className="mk-row-body">Each event stores the time, the person, the action and, for actions taken in a browser, the IP address and browser. Behind a proxy, set <code>TRUST_PROXY=true</code> so the real client IP is recorded.</p>
-            <p className="mk-row-body">Events form a keyed hash chain per document, so a changed or removed entry breaks the chain. The chain head is printed on the certificate. Signing links expire, and voiding or declining a document revokes them.</p>
+            <p className="mk-row-body">Events form a keyed hash chain per document, so a changed or removed entry breaks the chain. The chain head is printed on the certificate. Signing links expire, and voiding, declining or expiring a document revokes them.</p>
+            <p className="mk-row-body">A sender can require an email code: before the document opens, the signer enters a 6-digit code sent to their address. Codes expire after 10 minutes and stop working after five wrong tries.</p>
           </div>
           <div className="mk-table-wrap">
             <table className="mk-table">
@@ -71,7 +75,9 @@ export default function Security() {
               <li><CircleCheck size={18} aria-hidden="true" />Each signer, their email, view and sign times and signature</li>
               <li><CircleCheck size={18} aria-hidden="true" />The audit trail with times, and IP addresses for actions taken in a browser</li>
               <li><CircleCheck size={18} aria-hidden="true" />The head of the audit hash chain and the number of events</li>
+              <li><CircleCheck size={18} aria-hidden="true" />When a signer confirmed an email code, if the sender required one</li>
             </ul>
+            <p className="mk-row-body">The finished PDF also carries a digital seal. PDF readers use it to show whether the file was changed after completion. The seal is self-signed unless you set your own certificate with <code>SIGNING_P12_BASE64</code>, so readers may list its signer as unverified, and it does not identify a person or company.</p>
             <p className="mk-row-body">The SHA-256 of the finished signed PDF is stored too and shown on the sender’s document page.</p>
           </div>
           <figure className="cert" aria-label="Example certificate of completion">

@@ -12,6 +12,8 @@ const CSP_REPORT_ONLY = [
 export default {
   output: 'standalone',
   poweredByHeader: false,
+  // Loaded from node_modules at runtime instead of bundled (CJS with dynamic requires).
+  serverExternalPackages: ['@signpdf/signpdf', '@signpdf/placeholder-pdf-lib', '@signpdf/signer-p12', '@signpdf/utils', 'node-forge'],
   async rewrites() {
     return [
       { source: '/robots.txt', destination: '/api/robots' },

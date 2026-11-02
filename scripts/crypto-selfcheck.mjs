@@ -1,5 +1,6 @@
 // Self-check for lib/crypto.js and the legacy-data migration in lib/db.js. Run: node scripts/crypto-selfcheck.mjs
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,6 +53,14 @@ for (const i of [5, 20, enc.length - 1]) {
   assert.throws(() => c.decryptBuffer(bad, 'file:x.original'), `tamper at byte ${i}`);
 }
 assert.throws(() => c.decryptBuffer(Buffer.from('CSE1short'), 'a'), 'truncated');
+
+// keyedHash: HMAC-SHA256 under an HKDF subkey per info, stable, separated by info.
+const kh = c.keyedHash('otp', 'r1:123456');
+const sub = crypto.hkdfSync('sha256', Buffer.from(fs.readFileSync(path.join(dir, 'encryption.key'), 'utf8').trim(), 'hex'), Buffer.alloc(0), 'countersign-otp', 32);
+assert.equal(kh, crypto.createHmac('sha256', Buffer.from(sub)).update('r1:123456').digest('hex'), 'keyedHash matches the documented construction');
+assert.equal(c.keyedHash('otp', 'r1:123456'), kh, 'stable (cached subkey)');
+assert.notEqual(c.keyedHash('otp-session', 'r1:123456'), kh, 'different info, different hash');
+assert.notEqual(c.keyedHash('otp', 'r1:123457'), kh);
 
 // writeEncrypted / readDecrypted / fileAad.
 const out = path.join(dir, 'w.signed.pdf');

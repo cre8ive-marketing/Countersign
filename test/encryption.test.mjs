@@ -182,7 +182,8 @@ test('signing: field values stored as enc:v1:, signed PDF encrypted, hashes over
 
   const signed = await call(`/api/documents/${id}/file?kind=signed`, { method: 'GET' });
   assert.equal(signed.status, 200);
-  assert.equal((await PDFDocument.load(signed.data)).getPageCount(), 3);
+  const pages = (await PDFDocument.load(signed.data)).getPageCount();
+  assert.ok(pages >= 2 + 1, `2 original pages + at least 1 certificate page, got ${pages}`);
   assert.ok((await signer(`/api/sign/${tc}/file`, { method: 'GET' })).data.equals(signed.data), 'cc download equals owner download');
   assert.ok((await call(`/api/documents/${id}/file`, { method: 'GET' })).data.equals(orig), 'original intact after signing');
   if (!DATA) return t.diagnostic('disk/DB assertions skipped: DATA_DIR unset');

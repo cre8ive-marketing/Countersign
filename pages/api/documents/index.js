@@ -11,6 +11,8 @@ export default api({
     if (!String(req.headers['content-type']).startsWith('application/pdf')) fail(415, 'Upload a PDF file');
     const bytes = await readRaw(req, MAX_BYTES);
     if (bytes.subarray(0, 5).toString() !== '%PDF-') fail(400, 'This file is not a PDF');
+    // An unsigned @signpdf placeholder (`/ByteRange [0 /********** ...`) would break our seal at completion.
+    if (/\/ByteRange\s*\[\s*0\s+\/\*{10}/.test(Buffer.from(bytes).toString('latin1'))) fail(400, 'This PDF contains an unfinished signature placeholder. Export it again and upload the new file.');
     let pageCount;
     try {
       pageCount = await countPages(bytes);

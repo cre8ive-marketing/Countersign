@@ -6,7 +6,7 @@ import { useSession, primaryAction } from '../components/marketing/useSession';
 // Only v1 capabilities from PRODUCT.md and README.md.
 const SECTIONS = [
   ['prepare', 'Prepare any PDF in a few clicks.', 'Upload the file you already have. Click to place fields for each person, drag to move, resize from the corner, and nudge with the arrow keys.', [
-    'Signature, initials, date signed, full name, email, text and checkbox fields',
+    'Signature, initials, date signed, full name, email, company, job title, text, number, checkbox, dropdown, radio and stamp fields',
     'Each recipient gets a colour, so you can see whose field is whose',
     'Required or optional fields for every person',
   ]],
@@ -14,6 +14,8 @@ const SECTIONS = [
     'People with the same order number sign in parallel',
     'Copy recipients get the signed PDF without signing',
     'No email server? Copy each private signing link and send it yourself',
+    'Sign it yourself: be the only signer and sign straight away, with no email',
+    'Optional expiry after 7 to 90 days, and an optional email code before a signer can open the document',
   ]],
   ['signer', 'A signer view that needs no instructions.', 'Signers open a private link. No account, no download. A guided button takes them to the next field until the document is done.', [
     'Type a signature in one of five handwriting styles, draw it, or upload your own',
@@ -34,6 +36,7 @@ const SECTIONS = [
     'The full audit trail with the time of each event, and the IP address for actions taken in a browser',
     'The SHA-256 fingerprint of the original document',
     'A tamper-evident hash chain of events, with its head printed on the certificate',
+    'A digital seal that shows whether the PDF changed after completion (self-signed unless you add your own certificate)',
   ]],
 ];
 

@@ -6,13 +6,18 @@ export async function register() {
     // instead of leaving it up (and healthy) while every request fails.
     try {
       (await import('./lib/db')).default.prepare('SELECT 1').get();
+      // Only the operator certificate: the self-signed one is generated lazily at first completion.
+      if (process.env.SIGNING_P12_BASE64) (await import('./lib/pdfsign')).sealCertificate();
     } catch (e) {
       console.error(`Startup check failed: ${e.message}`);
       process.exit(1);
     }
-    const { sendDueReminders } = await import('./lib/documents');
+    const documents = await import('./lib/documents');
+    const { sendDueReminders } = documents;
     const { purgeExpired } = await import('./lib/auth');
-    setInterval(() => {
+    setInterval(async () => {
+      // Expire first so reminders never go out for a document past its expiry.
+      try { await documents.expireDueDocuments?.(); } catch (e) { console.error('Expiry failed:', e); }
       sendDueReminders().catch((e) => console.error('Reminders failed:', e));
       try { purgeExpired(); } catch (e) { console.error('Session purge failed:', e); }
     }, 60 * 60 * 1000).unref();

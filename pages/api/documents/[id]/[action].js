@@ -3,8 +3,8 @@ import { copyDocument, ownedDocument, remind, sendDocument, voidDocument } from 
 
 const actions = {
   async send(req, res, user, full) {
-    await sendDocument(full, user, req, appUrl(req));
-    res.json({ ok: true });
+    const out = await sendDocument(full, user, req, appUrl(req), { selfSign: Boolean(req.body?.selfSign) });
+    res.json(out?.signUrl ? { ok: true, signUrl: out.signUrl } : { ok: true });
   },
   void(req, res, user, full) {
     voidDocument(full, user, req.body?.reason, req);

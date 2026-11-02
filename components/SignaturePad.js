@@ -24,10 +24,12 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_URL = 400000; // the server rejects longer data URLs
 const MAX_W = 900, MAX_H = 300;
 
-// Lets a signer type, draw or upload a signature; resolves to a trimmed transparent PNG data URL.
+// Lets a signer type, draw or upload a signature (a stamp is upload only); resolves to a trimmed transparent PNG data URL.
 export default function SignaturePad({ kind = 'signature', defaultName = '', onAdopt, onCancel }) {
+  const noun = { initials: 'initials', stamp: 'stamp' }[kind] ?? 'signature';
   const initialsOf = (n) => n.split(/\s+/).filter(Boolean).map((p) => p[0]).join('').toUpperCase().slice(0, 3);
-  const [mode, setMode] = useState('type');
+  const modes = kind === 'stamp' ? ['upload'] : ['type', 'draw', 'upload'];
+  const [mode, setMode] = useState(modes[0]);
   const [text, setText] = useState(kind === 'initials' ? initialsOf(defaultName) : defaultName);
   const [style, setStyle] = useState(STYLES[0].id);
   const [drawn, setDrawn] = useState(false);
@@ -91,7 +93,7 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
     setBusy(true);
     try {
       const png = await processUpload(file);
-      if (!png) setUploadError('No signature found in this image. Use dark ink on a light background.');
+      if (!png) setUploadError(`No ${noun} found in this image. Use dark ink on a light background.`);
       setUpload(png);
     } catch {
       setUploadError('This image could not be read. Try saving it again as PNG or JPEG.');
@@ -116,18 +118,17 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
   }
 
   const ready = { type: text.trim().length > 0, draw: drawn, upload: Boolean(upload) }[mode];
-  const noun = kind === 'initials' ? 'initials' : 'signature';
   const sample = text.trim() || (kind === 'initials' ? 'AB' : 'Your name');
 
   return (
     <div className="sigpad">
-      <div className="segmented" role="tablist" aria-label={`How to create your ${noun}`}>
-        {['type', 'draw', 'upload'].map((m) => (
+      {modes.length > 1 && <div className="segmented" role="tablist" aria-label={`How to create your ${noun}`}>
+        {modes.map((m) => (
           <button key={m} type="button" role="tab" aria-selected={mode === m} className={mode === m ? 'is-active' : ''} onClick={() => setMode(m)}>
             {{ type: 'Type', draw: 'Draw', upload: 'Upload' }[m]}
           </button>
         ))}
-      </div>
+      </div>}
 
       {mode === 'type' && (
         <div className="sigpad-type">
@@ -170,11 +171,13 @@ export default function SignaturePad({ kind = 'signature', defaultName = '', onA
         </div>
       )}
 
-      <p className="sigpad-legal">By adopting, you agree {kind === 'initials' ? 'these initials are' : 'this signature is'} the legal equivalent of your handwritten {noun} on this document.</p>
+      <p className="sigpad-legal">{kind === 'stamp'
+        ? 'By adopting, you agree to place this stamp on the document as your mark.'
+        : `By adopting, you agree ${kind === 'initials' ? 'these initials are' : 'this signature is'} the legal equivalent of your handwritten ${noun} on this document.`}</p>
       <p className="sigpad-note"><Lock size={14} aria-hidden="true" />Your {noun} {kind === 'initials' ? 'are' : 'is'} stored encrypted on this server.</p>
       <div className="sigpad-actions">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button variant="accent" onClick={adopt} disabled={!ready || busy} loading={busy && mode === 'type'}>Adopt and sign</Button>
+        <Button variant="accent" onClick={adopt} disabled={!ready || busy} loading={busy && mode === 'type'}>{kind === 'stamp' ? 'Adopt and stamp' : 'Adopt and sign'}</Button>
       </div>
     </div>
   );

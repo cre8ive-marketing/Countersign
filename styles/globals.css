@@ -371,6 +371,12 @@ button.sfield.is-filled:hover { background: rgba(58, 80, 107, 0.1); }
 .sfield input:not([type='checkbox']) { width: 100%; height: 100%; border: 0; background: transparent; padding: 0 5px; color: var(--color-foreground); outline: none; }
 .sfield input[type='checkbox'] { width: 80%; height: 80%; margin: 0; accent-color: var(--color-accent); }
 .sfield-text { width: 100%; padding: 0 5px; color: var(--color-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sfield select { width: 100%; height: 100%; border: 0; background: transparent; padding: 0 3px; color: var(--color-foreground); font: inherit; font-size: clamp(7px, 62cqh, 14px); outline: none; cursor: pointer; }
+fieldset.sfield { flex-direction: column; align-items: stretch; justify-content: space-evenly; padding: 2px 4px; min-width: 0; }
+.sfield-radio { display: flex; align-items: center; gap: 4px; min-height: 0; flex: 1; font-size: clamp(7px, 22cqh, 13px); color: var(--color-foreground); cursor: pointer; white-space: nowrap; overflow: hidden; }
+.sfield-radio input { width: 1.1em; height: 1.1em; margin: 0; flex: none; accent-color: var(--color-accent); }
+.sfield-radio span { overflow: hidden; text-overflow: ellipsis; }
+.sfield.is-invalid { border: 1.5px solid var(--brand-amber); box-shadow: inset 0 0 0 1px var(--brand-amber); }
 .rofield { position: absolute; object-fit: contain; }
 .rofield-text { display: flex; align-items: center; padding: 0 3px; color: var(--color-foreground); overflow: hidden; white-space: nowrap; }
 .rofield-check { display: grid; place-items: center; color: var(--color-foreground); }
@@ -383,6 +389,16 @@ button.sfield.is-filled:hover { background: rgba(58, 80, 107, 0.1); }
 .tone-warn { background: var(--color-info-soft); color: var(--brand-navy); }
 .tone-bad { background: var(--color-sand-soft); color: var(--brand-ink); }
 .tone-neutral { background: var(--color-muted); color: var(--color-muted-foreground); }
+.otp-form { display: grid; gap: var(--space-sm); width: 100%; max-width: 280px; text-align: left; }
+.otp-form label { font-size: 14px; font-weight: 600; }
+.otp-input { font-family: var(--mono); font-size: 22px; letter-spacing: 0.3em; text-align: center; }
+.otp-error { width: 100%; padding: 10px 12px; background: var(--color-destructive-soft); border: 1px solid var(--color-destructive-edge); border-radius: var(--radius-sm); color: var(--brand-ink); font-weight: 600; font-size: 15px; text-align: left; outline: none; }
+.otp-error:focus-visible { box-shadow: 0 0 0 2px var(--color-ring); }
+.options-editor { display: grid; gap: var(--space-sm); margin: 0 0 var(--space-md); padding: 0; border: 0; min-width: 0; }
+.options-editor legend { padding: 0; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.option-row { display: flex; gap: 4px; align-items: center; }
+.option-row .input { flex: 1; min-width: 0; }
+.options-editor .btn { justify-self: start; }
 .status-foot { display: flex; align-items: center; gap: 6px; margin-top: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--color-border-soft); width: 100%; justify-content: center; font-size: 13px; color: var(--color-muted-foreground); }
 
 /* Signature pad */

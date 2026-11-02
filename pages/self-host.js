@@ -73,7 +73,8 @@ export default function SelfHost() {
 
           <h2 id="limits">Known limits</h2>
           <ul>
-            <li>Signatures are electronic signatures with an audit trail, not certificate-based digital signatures. There is no PAdES or X.509 seal on the PDF.</li>
+            <li>Signatures are electronic signatures with an audit trail. The finished PDF carries a digital seal that shows later changes; it uses a self-signed certificate unless you set <code>SIGNING_P12_BASE64</code> and <code>SIGNING_P12_PASSPHRASE</code>, so PDF readers may show its signer as unverified. The seal does not identify a person.</li>
+            <li>Email codes for signers need SMTP. Without it, the option is turned off.</li>
             <li>Text typed into fields supports Latin-1 characters only. Drawn and typed signatures are images and are not affected.</li>
             <li>Pages with a rotation flag are stamped as if unrotated.</li>
             <li>Titles, names, email addresses and audit entries are not encrypted in the database.</li>

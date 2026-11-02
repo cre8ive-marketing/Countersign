@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Send, Check, UserRound } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Send, Check, UserRound, PenLine, X } from 'lucide-react';
 import { withUser } from '../../../../lib/auth';
 import { ownedDocument } from '../../../../lib/documents';
-import { apiFetch, FIELD_META, recipientColor } from '../../../../lib/client';
+import { mailEnabled } from '../../../../lib/mail';
+import { apiFetch, cleanOptions, FIELD_META, recipientColor } from '../../../../lib/client';
 import { Button } from '../../../../components/ui';
 import PdfPages from '../../../../components/PdfPages';
 
@@ -15,22 +16,29 @@ export const getServerSideProps = withUser(async (ctx, user) => {
   return {
     props: {
       user,
-      doc: { id: doc.id, title: doc.title, message: doc.message, sequential: !!doc.sequential, reminderDays: doc.reminder_days, isTemplate: !!doc.is_template },
+      mail: mailEnabled(),
+      doc: {
+        id: doc.id, title: doc.title, message: doc.message, sequential: !!doc.sequential, reminderDays: doc.reminder_days, isTemplate: !!doc.is_template,
+        requireOtp: !!doc.require_otp, expireDays: doc.expire_days ?? 0,
+      },
       initialRecipients: recipients.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role })),
-      initialFields: fields.map((f) => ({ id: f.id, recipientId: f.recipient_id, type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, required: !!f.required, label: f.label })),
+      initialFields: fields.map((f) => ({ id: f.id, recipientId: f.recipient_id, type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, required: !!f.required, label: f.label, options: f.options })),
     },
   };
 });
 
 const tempId = () => `t${Math.random().toString(36).slice(2, 10)}`;
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
+const EXPIRY_CHOICES = [0, 7, 14, 30, 60, 90];
 
-export default function Editor({ user, doc, initialRecipients, initialFields }) {
+export default function Editor({ user, mail, doc, initialRecipients, initialFields }) {
   const router = useRouter();
   const [title, setTitle] = useState(doc.title);
   const [message, setMessage] = useState(doc.message);
   const [sequential, setSequential] = useState(doc.sequential);
   const [reminderDays, setReminderDays] = useState(doc.reminderDays);
+  const [requireOtp, setRequireOtp] = useState(doc.requireOtp && mail);
+  const [expireDays, setExpireDays] = useState(doc.expireDays);
   const [recipients, setRecipients] = useState(initialRecipients.length ? initialRecipients
     : [{ id: tempId(), name: '', email: '', role: 'signer' }]);
   const [fields, setFields] = useState(initialFields);
@@ -38,7 +46,7 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
   const [placing, setPlacing] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [saveState, setSaveState] = useState('saved');
-  const [sending, setSending] = useState(false);
+  const [sending, setSending] = useState(null); // 'send' | 'self'
   const [error, setError] = useState(null);
   const pageSizes = useRef([]);
 
@@ -48,7 +56,10 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
   const active = recipients.find((r) => r.id === activeId);
 
   // Autosave the whole draft shortly after any change.
-  const payload = useMemo(() => ({ title, message, sequential, reminderDays, recipients, fields }), [title, message, sequential, reminderDays, recipients, fields]);
+  const payload = useMemo(() => ({
+    title, message, sequential, reminderDays, requireOtp, expireDays, recipients,
+    fields: fields.map((f) => (FIELD_META[f.type].choices ? { ...f, options: cleanOptions(f.options) } : f)),
+  }), [title, message, sequential, reminderDays, requireOtp, expireDays, recipients, fields]);
   const first = useRef(true);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
@@ -70,7 +81,7 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
 
   async function send() {
     setError(null);
-    setSending(true);
+    setSending('send');
     try {
       await apiFetch(`/api/documents/${doc.id}`, { method: 'PUT', body: payload });
       if (doc.isTemplate) return router.push('/app?view=templates');
@@ -78,7 +89,30 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
       router.push(`/app/documents/${doc.id}?sent=1`);
     } catch (e) {
       setError(e.message);
-      setSending(false);
+      setSending(null);
+    }
+  }
+
+  // Makes the owner the only signer, gives them every field, and opens the signing page. No invitation is emailed.
+  async function signMyself() {
+    const isMe = (r) => r.email.toLowerCase() === user.email.toLowerCase();
+    if (recipients.some((r) => !isMe(r)) && !confirm('Sign it myself removes the other recipients and gives all fields to you. Continue?')) return;
+    const me = recipients.find(isMe);
+    const self = { id: me?.id ?? tempId(), name: me?.name || user.name, email: user.email, role: 'signer' };
+    const movedFields = payload.fields.map((f) => ({ ...f, recipientId: self.id }));
+    setRecipients([self]);
+    setFields(movedFields);
+    setActiveId(self.id);
+    setRequireOtp(false);
+    setError(null);
+    setSending('self');
+    try {
+      await apiFetch(`/api/documents/${doc.id}`, { method: 'PUT', body: { ...payload, requireOtp: false, recipients: [self], fields: movedFields } });
+      const { signUrl } = await apiFetch(`/api/documents/${doc.id}/send`, { body: { selfSign: true } });
+      router.push(signUrl);
+    } catch (e) {
+      setError(e.message);
+      setSending(null);
     }
   }
 
@@ -123,7 +157,8 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
     const h = meta.h / size.ptHeight;
     const x = clamp01((e.clientX - rect.left) / rect.width - w / 2);
     const y = clamp01((e.clientY - rect.top) / rect.height - h / 2);
-    const f = { id: tempId(), recipientId: active.id, type: placing, page, x: Math.min(x, 1 - w), y: Math.min(y, 1 - h), w, h, required: placing !== 'checkbox', label: '' };
+    const f = { id: tempId(), recipientId: active.id, type: placing, page, x: Math.min(x, 1 - w), y: Math.min(y, 1 - h), w, h, required: placing !== 'checkbox', label: '',
+      options: meta.choices ? ['Option 1', 'Option 2'] : null };
     setFields((fs) => [...fs, f]);
     setSelectedId(f.id);
     setPlacing(null);
@@ -161,7 +196,12 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
         {doc.isTemplate && <span className="badge badge-neutral">Template</span>}
         <div className="editor-bar-actions">
           <Button variant="ghost" onClick={discard} aria-label={doc.isTemplate ? 'Delete template' : 'Delete draft'} title={doc.isTemplate ? 'Delete template' : 'Delete draft'}><Trash2 size={16} strokeWidth={1.75} /></Button>
-          <Button variant="primary" onClick={send} loading={sending}>
+          {!doc.isTemplate && (
+            <Button variant="secondary" onClick={signMyself} loading={sending === 'self'} disabled={!!sending}>
+              <PenLine size={15} strokeWidth={1.75} aria-hidden="true" />Sign it myself
+            </Button>
+          )}
+          <Button variant="primary" onClick={send} loading={sending === 'send'} disabled={!!sending}>
             {doc.isTemplate ? <>Save template</> : <><Send size={15} strokeWidth={1.75} aria-hidden="true" />Send for signature</>}
           </Button>
         </div>
@@ -272,11 +312,14 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
                   {signers.map((s) => <option key={s.id} value={s.id}>{s.name || 'Unnamed signer'}</option>)}
                 </select>
               </div>
-              {selected.type === 'text' && (
+              {['text', 'company', 'jobtitle', 'number'].includes(selected.type) && (
                 <div className="field">
                   <label htmlFor="f-label">Placeholder</label>
-                  <input id="f-label" className="input" value={selected.label} maxLength={80} placeholder="e.g. Company name" onChange={(e) => updateField(selected.id, { label: e.target.value })} />
+                  <input id="f-label" className="input" value={selected.label} maxLength={80} placeholder={selected.type === 'number' ? 'e.g. Amount' : 'e.g. Department'} onChange={(e) => updateField(selected.id, { label: e.target.value })} />
                 </div>
+              )}
+              {FIELD_META[selected.type].choices && (
+                <OptionsEditor options={selected.options ?? []} onChange={(options) => updateField(selected.id, { options })} />
               )}
               {!FIELD_META[selected.type].auto && (
                 <label className="check">
@@ -304,6 +347,24 @@ export default function Editor({ user, doc, initialRecipients, initialFields }) 
                   <option value={7}>Every week</option>
                 </select>
                 <p className="field-hint">Sent by email while someone still needs to sign.</p>
+              </div>
+              {!doc.isTemplate && (
+                <div className="field">
+                  <label htmlFor="expire">Expires</label>
+                  <select id="expire" className="input" value={expireDays} onChange={(e) => setExpireDays(Number(e.target.value))}>
+                    {EXPIRY_CHOICES.map((d) => <option key={d} value={d}>{d ? `${d} days after sending` : 'Never'}</option>)}
+                  </select>
+                  <p className="field-hint">After this, signing links stop working and the document is marked expired.</p>
+                </div>
+              )}
+              <div className="field">
+                <label className="check">
+                  <input type="checkbox" checked={requireOtp && mail} disabled={!mail} aria-describedby="otp-hint" onChange={(e) => setRequireOtp(e.target.checked)} />
+                  Require an email code before signing
+                </label>
+                <p id="otp-hint" className="field-hint">{mail
+                  ? 'Each signer gets a 6-digit code by email and enters it before they can see the document.'
+                  : 'Needs email (SMTP) to be set up on this server.'}</p>
               </div>
               <div className="summary">
                 <h3>Summary</h3>

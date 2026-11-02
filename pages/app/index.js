@@ -5,7 +5,7 @@ import { Upload, Search, ChevronRight, FileText, LayoutTemplate, PenLine } from 
 import { withUser } from '../../lib/auth';
 import db from '../../lib/db';
 import { signingToken } from '../../lib/documents';
-import { apiFetch, relativeTime, recipientColor } from '../../lib/client';
+import { apiFetch, formatDate, relativeTime, recipientColor } from '../../lib/client';
 import AppShell from '../../components/AppShell';
 import { Avatar, Button, StatusBadge } from '../../components/ui';
 
@@ -15,11 +15,12 @@ const VIEWS = [
   { id: 'waiting', label: 'Waiting for others' },
   { id: 'completed', label: 'Completed' },
   { id: 'draft', label: 'Drafts' },
+  { id: 'expired', label: 'Expired' },
 ];
 
 export const getServerSideProps = withUser(async (ctx, user) => {
   const isTemplates = ctx.query.view === 'templates';
-  const docs = db.prepare(`SELECT id, title, status, updated_at, page_count FROM documents
+  const docs = db.prepare(`SELECT id, title, status, updated_at, page_count, expires_at FROM documents
     WHERE owner_id = ? AND is_template = ? ORDER BY updated_at DESC`).all(user.id, isTemplates ? 1 : 0);
   const recips = db.prepare(`SELECT r.document_id, r.name, r.role, r.status, r.position FROM recipients r
     JOIN documents d ON d.id = r.document_id WHERE d.owner_id = ? ORDER BY r.position`).all(user.id);
@@ -35,7 +36,7 @@ export const getServerSideProps = withUser(async (ctx, user) => {
     props: {
       user,
       isTemplates,
-      docs: docs.map((d) => ({ ...d, recipients: byDoc[d.id] ?? [] })),
+      docs: docs.map((d) => ({ id: d.id, title: d.title, status: d.status, updated_at: d.updated_at, page_count: d.page_count, expires_at: d.expires_at, recipients: byDoc[d.id] ?? [] })),
       // Rows whose link is expired or revoked have no token and are left out.
       action: action.map((a) => ({ id: a.document_id, title: a.title, updated_at: a.doc_updated_at, token: signingToken(a) }))
         .filter((a) => a.token),
@@ -81,6 +82,7 @@ export default function Documents({ user, isTemplates, docs, action }) {
     if (view === 'waiting') return d.status === 'sent';
     if (view === 'completed') return d.status === 'completed';
     if (view === 'draft') return d.status === 'draft';
+    if (view === 'expired') return d.status === 'expired';
     return true;
   });
   const counts = {
@@ -174,7 +176,7 @@ function DocRow({ doc, isTemplate, onUse }) {
         <span className="doc-icon"><FileText size={16} strokeWidth={1.75} aria-hidden="true" /></span>
         <span className="doc-main">
           <strong>{doc.title}</strong>
-          <span>{isTemplate ? `${doc.page_count} page${doc.page_count === 1 ? '' : 's'} · ${signers.length} role${signers.length === 1 ? '' : 's'}` : signers.length ? `${signed} of ${signers.length} signed` : 'No recipients yet'}</span>
+          <span>{isTemplate ? `${doc.page_count} page${doc.page_count === 1 ? '' : 's'} · ${signers.length} role${signers.length === 1 ? '' : 's'}` : signers.length ? `${signed} of ${signers.length} signed${doc.status === 'sent' && doc.expires_at ? ` · Expires ${formatDate(doc.expires_at)}` : ''}` : 'No recipients yet'}</span>
         </span>
         <span className="avatars" aria-label={signers.map((s) => s.name).join(', ')}>
           {signers.slice(0, 4).map((s) => <Avatar key={s.position} name={s.name} color={recipientColor(s.position)} />)}

@@ -8,11 +8,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test --test-concurrency=1 test/flow.test.mjs test/marketing.test.mjs test/encryption.test.mjs test/p0.test.mjs test/security/"
+    "test": "node --test --test-concurrency=1 test/flow.test.mjs test/marketing.test.mjs test/encryption.test.mjs test/p0.test.mjs test/tier1.test.mjs test/security/"
   },
   "dependencies": {
+    "@signpdf/placeholder-pdf-lib": "3.4.0",
+    "@signpdf/signer-p12": "3.4.0",
+    "@signpdf/signpdf": "3.4.0",
+    "@signpdf/utils": "3.4.0",
     "lucide-react": "1.66.0",
     "next": "^16.4.3",
+    "node-forge": "1.4.2",
     "nodemailer": "10.3.1",
     "pdf-lib": "1.17.1",
     "pdfjs-dist": "6.4.299",
