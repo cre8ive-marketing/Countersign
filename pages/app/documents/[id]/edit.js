@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Send, Check, UserRound, PenLine, X } from 'lucide-react';
 import { withUser } from '../../../../lib/auth';
-import { ownedDocument } from '../../../../lib/documents';
+import { ownedDocument, publicUrlFor } from '../../../../lib/documents';
 import { mailEnabled } from '../../../../lib/mail';
 import { apiFetch, cleanOptions, FIELD_META, recipientColor, redirectUrlError } from '../../../../lib/client';
 import { Button } from '../../../../components/ui';
 import ContactInput from '../../../../components/ContactInput';
+import { BulkSend, PublicLink } from '../../../../components/TemplateTools';
 import PdfPages from '../../../../components/PdfPages';
 
 export const getServerSideProps = withUser(async (ctx, user) => {
@@ -21,6 +22,7 @@ export const getServerSideProps = withUser(async (ctx, user) => {
       doc: {
         id: doc.id, title: doc.title, message: doc.message, sequential: !!doc.sequential, reminderDays: doc.reminder_days, isTemplate: !!doc.is_template,
         requireOtp: !!doc.require_otp, expireDays: doc.expire_days ?? 0, redirectUrl: doc.redirect_url ?? '',
+        publicUrl: doc.is_template ? publicUrlFor(doc) ?? null : null,
       },
       initialRecipients: recipients.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role })),
       initialFields: fields.map((f) => ({ id: f.id, recipientId: f.recipient_id, type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, required: !!f.required, label: f.label, options: f.options })),
@@ -83,6 +85,13 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
       setSaveState('error');
       setError(e.message);
     }
+  }
+
+  // Bulk send and the public link act on the saved template, so save what is on screen first.
+  async function saveFirst() {
+    if (redirectError) { setRedirectTouched(true); throw new Error(redirectError); }
+    await apiFetch(`/api/documents/${doc.id}`, { method: 'PUT', body: payload });
+    setSaveState('saved');
   }
 
   async function send() {
@@ -193,7 +202,7 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
   return (
     <div className="editor">
       <Head><title>{`Prepare ${title} · Countersign`}</title></Head>
-      <header className="editor-bar">
+      <header className={`editor-bar${doc.isTemplate ? ' is-template' : ''}`}>
         <Link href={doc.isTemplate ? '/app?view=templates' : '/app'} className="icon-btn" aria-label="Back to documents"><ArrowLeft size={18} strokeWidth={1.75} /></Link>
         <div className="editor-title">
           <label htmlFor="doc-title" className="sr-only">Document title</label>
@@ -203,6 +212,12 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
         {doc.isTemplate && <span className="badge badge-neutral">Template</span>}
         <div className="editor-bar-actions">
           <Button variant="ghost" onClick={discard} aria-label={doc.isTemplate ? 'Delete template' : 'Delete draft'} title={doc.isTemplate ? 'Delete template' : 'Delete draft'}><Trash2 size={16} strokeWidth={1.75} /></Button>
+          {doc.isTemplate && (
+            <>
+              <PublicLink docId={doc.id} initialUrl={doc.publicUrl} eligible={recipients.length === 1 && recipients[0].role === 'signer'} saveFirst={saveFirst} disabled={!!sending} />
+              <BulkSend docId={doc.id} roles={recipients} mail={mail} saveFirst={saveFirst} disabled={!!sending} />
+            </>
+          )}
           {!doc.isTemplate && (
             <Button variant="secondary" onClick={signMyself} loading={sending === 'self'} disabled={!!sending}>
               <PenLine size={15} strokeWidth={1.75} aria-hidden="true" />Sign it myself

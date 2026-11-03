@@ -15,11 +15,14 @@ export async function register() {
     const documents = await import('./lib/documents');
     const { sendDueReminders } = documents;
     const { purgeExpired } = await import('./lib/auth');
+    const webhooks = await import('./lib/webhooks');
+    setInterval(() => webhooks.deliverDue().catch((e) => console.error('Webhook delivery failed:', e)), 60 * 1000).unref();
     setInterval(async () => {
       // Expire first so reminders never go out for a document past its expiry.
       try { await documents.expireDueDocuments?.(); } catch (e) { console.error('Expiry failed:', e); }
       sendDueReminders().catch((e) => console.error('Reminders failed:', e));
       try { purgeExpired(); } catch (e) { console.error('Session purge failed:', e); }
+      try { webhooks.purgeDeliveries(); } catch (e) { console.error('Webhook delivery purge failed:', e); }
     }, 60 * 60 * 1000).unref();
   }
 }

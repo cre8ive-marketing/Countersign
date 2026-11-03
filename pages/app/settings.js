@@ -7,6 +7,7 @@ import AppShell from '../../components/AppShell';
 import { LogOut, PenLine, RotateCcw, Trash2 } from 'lucide-react';
 import { Button, TextField } from '../../components/ui';
 import SignaturePad from '../../components/SignaturePad';
+import { ApiKeys, Webhooks } from '../../components/DeveloperSettings';
 
 export const getServerSideProps = withUser(async (ctx, user) => ({
   props: { user, server: { mail: mailEnabled(), signup: signupOpen(), appUrl: process.env.APP_URL || null } },
@@ -71,6 +72,8 @@ export default function Settings({ user, server }) {
 
         <SavedSignatures user={user} />
         <EmailTemplates user={user} />
+        <ApiKeys />
+        <Webhooks />
 
         <section className="card form-card">
           <div className="form-card-head"><h2>Sessions</h2><p>Lost a device or signed in on a shared computer? Sign out everywhere, including this browser.</p></div>

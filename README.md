@@ -49,7 +49,7 @@ Upload any PDF and click to place **signature, initials, stamp, date signed, ful
 Any number of signers, plus people who only receive a copy. Sign **in parallel or in a set order**; the next person is notified the moment the previous one finishes. Add a message and automatic email reminders, set the document to **expire** after a number of days, and optionally require each signer to enter a **one-time code** emailed to them before they can see or sign it. Or **sign it yourself** with no one else involved. Optionally send signers to an https address of your choice when they finish (they click to continue).
 
 ### Templates
-Save a document with fields placed for roles like *Client* and *Agency*. Reuse it and only type names and emails.
+Save a document with fields placed for roles like *Client* and *Agency*. Reuse it and only type names and emails. **Bulk send** one template to up to 500 people at once (type the rows or import a CSV), or turn on a **public link** so anyone with it can fill in their name and email and sign their own copy (useful for waivers and sign-up forms).
 
 </td>
 <td width="50%" valign="top">
@@ -61,7 +61,7 @@ A guided walkthrough jumps from field to field. Signers **type** a signature in 
 When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail. The finished PDF then gets a **digital seal** (a PKCS#7 signature over the whole file), so PDF readers can show whether it was changed afterwards. Anyone with a copy can check it on the public **/verify** page: the file is fingerprinted (SHA-256) in their browser and never uploaded.
 
 ### Manage
-A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time. **Contacts** fill in as you send (or import a CSV) and are suggested while you type recipients. Edit the **invite and completion emails** with placeholders such as `{{receiver_name}}` and `{{document_title}}`; the signing button is always added.
+A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time. **Contacts** fill in as you send (or import a CSV) and are suggested while you type recipients. Edit the **invite and completion emails** with placeholders such as `{{receiver_name}}` and `{{document_title}}`; the signing button is always added. File documents and templates into **folders**. Connect other systems with personal **API keys** and signed **webhooks**.
 
 </td>
 </tr>
@@ -125,6 +125,7 @@ Data goes to `./data` unless `DATA_DIR` is set.
 | `SIGNUP_MAX_PER_HOUR` | `10` | Sign-up attempts allowed per address per hour while sign-ups are open. |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | unset | Email delivery. Without SMTP, senders copy each signing link from the document page. **Set `APP_URL` too:** emails are not sent without it, because links built from the request's host could be forged. |
 | `SIGNING_P12_BASE64` `SIGNING_P12_PASSPHRASE` | unset | Your own certificate (PKCS#12, base64) for the digital seal on completed PDFs. Without it, Countersign generates a self-signed one once and stores it encrypted as `signing.p12` in `DATA_DIR`. An invalid or expired certificate stops the server at startup. |
+| `WEBHOOK_ALLOW_HTTP` `WEBHOOK_ALLOW_PRIVATE` | `false` | Development and tests only. Allow webhook URLs on plain `http://`, and to private, loopback or link-local addresses. Leave both off in production. |
 | `PORT` | `3000` | HTTP port. |
 
 ## Operating it
@@ -133,6 +134,35 @@ Data goes to `./data` unless `DATA_DIR` is set.
 - **Backups:** stop the container (or use `sqlite3 .backup`) and copy the whole data volume. The database and `files/` must be backed up together. Back up the encryption key separately; a backup without it cannot be restored.
 - **Upgrades:** `git pull && docker compose up -d --build`. The schema is created and extended on start. Existing unencrypted documents are encrypted once on the first start after upgrading.
 - **Security logs:** sign-ins, failed sign-ins, lockouts, password changes, expired links and file integrity failures are stored in the database and printed to stdout as JSON lines (`{"security_event": …}`, `{"audit_head": …}`). Ship stdout to your log system; the `audit_head` lines let you detect if recent audit events are later removed from the database.
+
+## API and webhooks
+
+Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks or your account, and it never returns signing links. Each key allows 600 requests an hour.
+
+| Method and path | What it does |
+|---|---|
+| `GET /api/documents?status=&template=0\|1&folder=&limit=&offset=` | List your documents and templates |
+| `POST /api/documents` | Upload a PDF (`Content-Type: application/pdf`; add `x-template: 1` for a template) |
+| `GET` `PUT` `DELETE /api/documents/{id}` | Read, edit (drafts) or delete |
+| `POST /api/documents/{id}/send` `void` `remind` `copy` `move` | Lifecycle actions (JSON body) |
+| `POST /api/documents/{id}/bulk` | Bulk send from a template: JSON `{ "rows": [[{ "name", "email" }, …], …] }` or a CSV body (`name,email` per role). Send an `Idempotency-Key` header so a retry cannot send twice. 10 calls an hour. |
+| `GET /api/documents/{id}/file?kind=original\|signed` | Download a PDF |
+| `GET` `POST /api/folders`, `PUT` `DELETE /api/folders/{id}` | Folders |
+
+**Webhooks** (Settings → Webhooks) send a JSON `POST` for `document.sent`, `recipient.viewed`, `recipient.signed`, `recipient.declined`, `document.completed`, `document.declined`, `document.voided` and `document.expired`. The body holds ids, title, status and the recipient's name, email and role, never files, field values or links. Deliveries that do not get a 2xx within 10 seconds are retried 6 more times over about 21 hours; redirects are not followed. After 20 deliveries fail every retry, the webhook is turned off and you get an email. Events can arrive out of order; use `createdAt` in the body. Webhook URLs must be `https://` and may not point to private or internal addresses.
+
+Each request carries `Countersign-Signature: t=<unix seconds>,v1=<hex>`, where `v1` is HMAC-SHA256 of `<t>.<raw body>` keyed with the whole `whsec_…` secret shown when you created the webhook. Check it before trusting the body:
+
+```js
+import crypto from 'node:crypto';
+
+function verify(rawBody, header, secret, toleranceSec = 300) {
+  const { t, v1 } = Object.fromEntries(header.split(',').map((p) => p.split('=')));
+  const expected = crypto.createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex');
+  const fresh = Math.abs(Date.now() / 1000 - Number(t)) <= toleranceSec;
+  return fresh && v1?.length === expected.length && crypto.timingSafeEqual(Buffer.from(v1), Buffer.from(expected));
+}
+```
 
 ## How it works
 
@@ -167,6 +197,9 @@ flowchart LR
 - **Digital seal:** the completed PDF is signed with a certificate so any later change is detectable. A self-signed seal does not identify a person or company, and PDF readers may show its signer as unverified; use your own certificate if that matters.
 - **Expiry:** past its expiry date a document can no longer be viewed, signed or declined, and its links are revoked.
 - **Requests:** every state-changing request is checked for same origin, and every document read or write checks ownership on the server.
+- **API keys:** stored only as keyed hashes, shown once, revocable, rate limited, and refused on account, key and webhook routes. Keys do not expire on their own and are not revoked by signing out; revoke unused keys.
+- **Webhooks:** secrets are stored encrypted. Each delivery resolves the host itself and refuses loopback, private, link-local and similar addresses at connect time, so DNS tricks cannot reach internal services.
+- **Public links:** anyone with the link can create a copy, so the signer's name and email are only what they typed (the audit trail says so). Copies expire after a day unless the template sets an expiry, each address may submit 10 times an hour, and each link 50 times a day. Turning the link off or issuing a new one stops the old one.
 - **Audit trail:** every action (upload, send, email, view, sign, decline, void, reminder) is recorded with time, IP and browser. Entries form a keyed hash chain per document. The certificate prints the chain head, the completion entry records both PDF hashes, and deleting a document keeps an encrypted record of its trail.
 
 ### Standards and audits
@@ -179,9 +212,10 @@ Countersign is software you run, so it can't hold certifications itself. ISO/IEC
 - Someone with write access to the database and the encryption key can still rewrite history. Ship the stdout logs off the server to keep an independent record.
 - No two-factor sign-in, email verification or encryption-key rotation yet.
 - Text typed into fields supports Latin-1 characters only (Devanagari or CJK print as `?`). Signatures are images and are not affected.
-- Not built yet: bulk send, teams and roles, a REST API and webhooks, custom branding, SSO.
+- Each document, including each bulk or public-link copy, stores its own encrypted copy of the PDF, so large templates sent to many people use a lot of disk.
+- Not built yet: teams and roles, API key scopes, custom branding, SSO.
 
-Found a vulnerability? Please report it privately to the maintainers instead of opening a public issue.
+Found a vulnerability? Please report it privately as described in [`SECURITY.md`](SECURITY.md).
 
 ## Development
 

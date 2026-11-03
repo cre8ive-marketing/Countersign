@@ -9,4 +9,4 @@ export default api({
     const kind = signed ? 'signed' : 'original';
     sendPdfBytes(res, readVerified(doc, kind), signed ? `${doc.title} (signed)` : doc.title, req.query.download === '1');
   },
-});
+}, { apiKey: true });

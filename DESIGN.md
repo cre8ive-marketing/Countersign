@@ -57,3 +57,7 @@ Sizes: `sm` 36px (40px hit area), default 40px, `lg` 48px; under 860px default i
 - Verify (`/verify`): marketing chrome, a card with one file picker. The SHA-256 is computed in the browser and only the hash is sent; outcomes use the status-card icon tones (amber signed, cyan-tint original, muted no match).
 - Contact suggestions: `components/ContactInput.js` is the one combobox (role `combobox` + `listbox`, `aria-activedescendant`, arrow keys, Enter, Escape). Options are 44px tall; the active option uses the selection tint.
 - Auth: an ink panel with the product's promise beside the form. The panel collapses to the form alone on smaller screens.
+- Folders: a 208px folder column beside the dashboard list (wrapping 44px chips under 860px). "All" plus each folder with its count; Rename and Delete appear for the open folder. Each row has a "Move to folder" icon button outside the row link, which opens a radio-list dialog.
+- Template editor: "Public link" and "Bulk send" sit in the editor bar and open dialogs, so they work where the side panel is hidden. Bulk send rows are fieldsets with a labelled name and email per role; CSV import uses `bulkRowsFromCsv` in `lib/client.js`.
+- Public template page (`/t/<token>`): the signer status card with a name and email form, an off-screen honeypot, and the accent "Continue to sign" button.
+- One-time secrets (API keys, webhook signing secrets): a sand-tint box with a read-only mono input and Copy; it disappears after Done.

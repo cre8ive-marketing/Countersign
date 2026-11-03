@@ -8,7 +8,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test --test-concurrency=1 test/flow.test.mjs test/marketing.test.mjs test/encryption.test.mjs test/p0.test.mjs test/tier1.test.mjs test/tier2.test.mjs test/security/"
+    "test": "node --test --test-concurrency=1 test/flow.test.mjs test/marketing.test.mjs test/encryption.test.mjs test/p0.test.mjs test/tier1.test.mjs test/tier2.test.mjs test/tier3.test.mjs test/security/"
   },
   "dependencies": {
     "@signpdf/placeholder-pdf-lib": "3.4.0",

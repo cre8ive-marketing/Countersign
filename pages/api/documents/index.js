@@ -1,12 +1,16 @@
 import { api, fail, readRaw } from '../../../lib/http';
 import { createDocument } from '../../../lib/documents';
 import { countPages } from '../../../lib/stamp';
+import { listDocuments } from '../../../lib/folders';
 
 export const config = { api: { bodyParser: false } };
 
 const MAX_BYTES = 25 * 1048576;
 
 export default api({
+  GET(req, res, user) {
+    res.json(listDocuments(user.id, req.query));
+  },
   async POST(req, res, user) {
     if (!String(req.headers['content-type']).startsWith('application/pdf')) fail(415, 'Upload a PDF file');
     const bytes = await readRaw(req, MAX_BYTES);
@@ -24,4 +28,4 @@ export default api({
     const id = createDocument({ ownerId: user.id, ownerName: user.name, title, bytes, pageCount, isTemplate: req.headers['x-template'] === '1', req });
     res.status(201).json({ id });
   },
-});
+}, { apiKey: true });
