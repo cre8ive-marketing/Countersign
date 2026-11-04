@@ -22,7 +22,7 @@ export function safeNext(next) {
 const waitText = (s) => (s < 60 ? `${s} seconds` : `${Math.ceil(s / 60)} minute${Math.ceil(s / 60) === 1 ? '' : 's'}`);
 
 // invite: { token, email, teamName } when signing up from a team invite; the email is fixed to the invited address.
-export default function AuthForm({ mode, closed, invite }) {
+export default function AuthForm({ mode, closed, invite, sso }) {
   const router = useRouter();
   // ?email= comes from the landing page start form.
   const [form, setForm] = useState(() => ({ name: '', email: invite?.email ?? (typeof router.query.email === 'string' ? router.query.email.slice(0, 254) : ''), password: '' }));
@@ -64,6 +64,14 @@ export default function AuthForm({ mode, closed, invite }) {
           <div className="auth-mobile-logo"><Logo /></div>
           <h1>{isSignup ? 'Create your account' : 'Welcome back'}</h1>
           <p className="auth-sub">{invite ? `You will join ${invite.teamName} when your account is created.` : isSignup ? 'Start sending documents for signature in minutes.' : 'Sign in to send and manage documents.'}</p>
+          {sso?.error && <div className="error-summary" role="alert">{sso.error}</div>}
+          {sso?.name && (
+            <>
+              {/* A plain link: this is a full-page redirect to the provider. */}
+              <a className="btn btn-secondary btn-block" href={sso.href}>Continue with {sso.name}</a>
+              <p className="auth-or"><span>or</span></p>
+            </>
+          )}
           {closed ? (
             <p className="banner banner-bad">Sign-ups are closed on this server. Ask the person who runs it to create an account for you, or to set ALLOW_SIGNUP=true.</p>
           ) : (

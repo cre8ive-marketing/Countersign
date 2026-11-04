@@ -10,7 +10,7 @@ export default api({
     const { public_token_hash, public_token_enc, ...rest } = doc;
     const withTokens = !user.apiKeyId && canWrite(req.query.id, user.id);
     res.setHeader('Cache-Control', 'private, no-store');
-    res.json({ doc: { ...rest }, recipients: recipients.map((r) => publicRecipient(r, withTokens)), fields, publicUrl: doc.owner_id === user.id ? publicUrlFor(doc) : null });
+    res.json({ doc: { ...rest }, recipients: recipients.map((r) => publicRecipient(r, withTokens)), fields, publicUrl: doc.owner_id === user.id && user.apiKeyScope !== 'read' ? publicUrlFor(doc) : null });
   },
   PUT(req, res, user) {
     const full = saveDraft(ownedDocument(req.query.id, user.id, 'write'), req.body ?? {});

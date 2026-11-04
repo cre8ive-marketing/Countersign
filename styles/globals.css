@@ -940,3 +940,6 @@ fieldset.sfield { flex-direction: column; align-items: stretch; justify-content:
   .copy-row { flex-direction: column; }
   .bulk-row { padding-inline: 12px; }
 }
+
+.auth-or { display: flex; align-items: center; gap: 12px; margin: 16px 0; font-size: 14px; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; border-top: 1px solid currentColor; opacity: .25; }

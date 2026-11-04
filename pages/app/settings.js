@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { withUser, signupOpen } from '../../lib/auth';
 import { mailEnabled } from '../../lib/mail';
+import { hasIdentity, oidcName, startHref } from '../../lib/oidc';
 import { apiFetch } from '../../lib/client';
 import AppShell from '../../components/AppShell';
 import { LogOut, PenLine, RotateCcw, Trash2 } from 'lucide-react';
@@ -10,10 +11,10 @@ import SignaturePad from '../../components/SignaturePad';
 import { ApiKeys, Webhooks } from '../../components/DeveloperSettings';
 
 export const getServerSideProps = withUser(async (ctx, user) => ({
-  props: { user, server: { mail: mailEnabled(), signup: signupOpen(), appUrl: process.env.APP_URL || null } },
+  props: { user, sso: oidcName() ? { name: oidcName(), href: startHref('/app/settings'), connected: hasIdentity(user.id), failed: ctx.query.sso === 'failed' } : null, server: { mail: mailEnabled(), signup: signupOpen(), appUrl: process.env.APP_URL || null } },
 }));
 
-export default function Settings({ user, server }) {
+export default function Settings({ user, sso, server }) {
   const router = useRouter();
   const [name, setName] = useState(user.name);
   const [currentPassword, setCurrent] = useState('');
@@ -75,6 +76,15 @@ export default function Settings({ user, server }) {
         <EmailTemplates user={user} />
         <ApiKeys />
         <Webhooks />
+
+        {sso && (
+          <section className="card form-card">
+            <div className="form-card-head"><h2>Single sign-on</h2><p>{sso.connected ? `This account is connected to ${sso.name}. You can sign in with it.` : `Connect this account to ${sso.name} to sign in with it. Your account there must use the same email as this one.`}</p></div>
+            {sso.failed && !sso.connected && <div className="error-summary" role="alert">That didn’t connect. Check that you used the same email as this account.</div>}
+            {/* A plain link: this is a full-page redirect to the provider. */}
+            {!sso.connected && <div className="form-card-foot"><a className="btn btn-secondary" href={sso.href}>Connect {sso.name}</a></div>}
+          </section>
+        )}
 
         <section className="card form-card">
           <div className="form-card-head"><h2>Sessions</h2><p>Lost a device or signed in on a shared computer? Sign out everywhere, including this browser.</p></div>

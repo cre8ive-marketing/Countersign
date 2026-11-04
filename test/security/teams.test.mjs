@@ -268,6 +268,10 @@ test('TW2-3: GET /api/documents/[id] gives a template public link to its owner o
   const url = (await action(c.member, tpl, 'public', { enabled: true })).json.url;
   assert.match(url, /^\/t\/[A-Za-z0-9_-]{43}$/);
   assert.equal((await call(`/api/documents/${tpl}`, { cookie: c.member.cookie })).json.publicUrl, url);
+  // SSO-14: the link lets anyone create a signing copy, so the owner's read-only key doesn't get it either.
+  const ownKey = async (scope) => (await call('/api/api-keys', { method: 'POST', cookie: c.member.cookie, body: { name: scope, scope } })).json.key;
+  assert.equal((await call(`/api/documents/${tpl}`, { headers: bearer(await ownKey('write')) })).json.publicUrl, url);
+  assert.equal((await call(`/api/documents/${tpl}`, { headers: bearer(await ownKey('read')) })).json.publicUrl, null);
   const secret = url.slice(3);
   for (const u of [c.owner, c.admin, c.member2]) {
     const r = await call(`/api/documents/${tpl}`, { cookie: u.cookie });
