@@ -21,13 +21,14 @@ export default function Settings({ user, server }) {
   const [state, setState] = useState({});
   const [outError, setOutError] = useState(null);
   const [outBusy, setOutBusy] = useState(false);
+  const [outKeys, setOutKeys] = useState(false);
   const outDialog = useRef(null);
 
   async function signOutEverywhere() {
     setOutBusy(true);
     setOutError(null);
     try {
-      await apiFetch('/api/auth/logout-all');
+      await apiFetch('/api/auth/logout-all', { body: { apiKeys: outKeys } });
       window.location.assign('/login'); // full load so no signed-in state lingers in memory
     } catch (e) {
       setOutError(e.message);
@@ -85,6 +86,10 @@ export default function Settings({ user, server }) {
         <dialog ref={outDialog} className="dialog" aria-labelledby="out-title">
           <h2 id="out-title">Sign out of all devices?</h2>
           <p className="dialog-text">Every browser signed in to this account, including this one, will need to sign in again.</p>
+          <label className="check">
+            <input type="checkbox" checked={outKeys} onChange={(e) => setOutKeys(e.target.checked)} />
+            Also revoke all my API keys
+          </label>
           {outError && <p className="field-error" role="alert">{outError}</p>}
           <div className="dialog-actions">
             <Button variant="ghost" type="button" onClick={() => outDialog.current?.close()}>Cancel</Button>

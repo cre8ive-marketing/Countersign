@@ -325,7 +325,7 @@ test('API keys: create (shown once), list without secrets, use with Bearer from 
   assert.match(created.headers.get('cache-control') || '', /no-store/);
   const listed = (await a('/api/api-keys', { method: 'GET' })).data.keys;
   assert.equal(listed.length, 1);
-  assert.deepEqual(Object.keys(listed[0]).sort(), ['createdAt', 'id', 'lastUsedAt', 'name', 'prefix']);
+  assert.deepEqual(Object.keys(listed[0]).sort(), ['createdAt', 'expiresAt', 'id', 'lastUsedAt', 'name', 'prefix']);
   assert.deepEqual([listed[0].id, listed[0].name, listed[0].prefix, listed[0].lastUsedAt], [id, 'CI script', key.slice(0, 10), null]);
   assert.ok(!JSON.stringify(listed).includes(key.slice(10)), 'key never listed');
   assert.deepEqual((await b('/api/api-keys', { method: 'GET' })).data.keys, [], 'per user');

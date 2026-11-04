@@ -22,7 +22,9 @@ export default api({
     const { id, url, email, role, teamName } = createInvite(user, req.body);
     logSecurity('team_invite_created', { ...clientInfo(req), userId: user.id, email: user.email, detail: `invite ${id} for ${email} as ${role}` });
     res.setHeader('Cache-Control', 'private, no-store');
-    const emailed = await sendMail({
+    // Server-wide cap so an open server can't be used as a mail relay; past it the link is still returned to copy.
+    const capped = Boolean(rateLimit('team-invite-mail', Number(process.env.INVITE_EMAILS_PER_HOUR) || 100, 36e5));
+    const emailed = !capped && await sendMail({
       to: email,
       subject: `${user.name} invited you to ${teamName} on Countersign`,
       heading: `Join ${teamName}`,

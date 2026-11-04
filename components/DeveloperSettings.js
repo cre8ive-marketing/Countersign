@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Copy, KeyRound, Plus, Send, Trash2, Webhook } from 'lucide-react';
+import { Check, Copy, KeyRound, Plus, RotateCcw, Send, Trash2, Webhook } from 'lucide-react';
 import { apiFetch, formatDate } from '../lib/client';
 import { Button, TextField } from './ui';
 
@@ -41,6 +41,7 @@ export function ApiKeys() {
   const [keys, setKeys] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
+  const [expiry, setExpiry] = useState('90'); // days, or '' for never
   const [created, setCreated] = useState(null); // the full key, shown once
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(null); // 'create' | 'revoke'
@@ -55,7 +56,7 @@ export function ApiKeys() {
     setBusy('create');
     setError(null);
     try {
-      const { key } = await apiFetch('/api/api-keys', { body: { name } });
+      const { key } = await apiFetch('/api/api-keys', { body: { name, expiresDays: expiry ? Number(expiry) : null } });
       setCreated(key);
       setName('');
       await load();
@@ -84,7 +85,7 @@ export function ApiKeys() {
     <section className="card form-card" aria-labelledby="keys-h">
       <div className="form-card-head">
         <h2 id="keys-h">API keys</h2>
-        <p>Let your own scripts list, upload, send and download your documents. Send the key as <code>Authorization: Bearer cs_…</code>. A key cannot change your account, manage keys or webhooks.</p>
+        <p>Let your own scripts list, upload, send and download your documents. Send the key as <code>Authorization: Bearer cs_…</code>. A key cannot change your account, manage keys or webhooks. In a team, a key acts with your team role: it can read the team’s documents, and an owner’s or admin’s key can also send, void and delete them.</p>
       </div>
       {loadError && <p className="field-error" role="alert">{loadError}</p>}
       {!keys && !loadError && <p className="field-hint" role="status">Loading…</p>}
@@ -95,7 +96,7 @@ export function ApiKeys() {
               <KeyRound size={16} strokeWidth={1.75} aria-hidden="true" />
               <div className="dev-main">
                 <strong>{k.name}</strong>
-                <span><code>{k.prefix}…</code> · Created {formatDate(k.createdAt)} · {k.lastUsedAt ? `Last used ${formatDate(k.lastUsedAt, true)}` : 'Never used'}</span>
+                <span><code>{k.prefix}…</code> · Created {formatDate(k.createdAt)} · {k.lastUsedAt ? `Last used ${formatDate(k.lastUsedAt, true)}` : 'Never used'} · {!k.expiresAt ? 'Never expires' : Date.parse(k.expiresAt) <= Date.now() ? 'Expired' : `Expires ${formatDate(k.expiresAt)}`}</span>
               </div>
               <Button variant="danger" size="sm" onClick={() => { setRevoking(k); setError(null); revokeDialog.current?.showModal(); }} aria-label={`Revoke ${k.name}`}>
                 <Trash2 size={14} aria-hidden="true" />Revoke
@@ -108,6 +109,15 @@ export function ApiKeys() {
       {created ? <OneTimeSecret label="API key" value={created} onDone={() => setCreated(null)} /> : (
         <form className="dev-form" onSubmit={create}>
           <TextField id="key-name" label="New key name" placeholder="e.g. CRM sync" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required autoComplete="off" />
+          <div className="field">
+            <label htmlFor="key-expiry">Expires</label>
+            <select id="key-expiry" className="input" value={expiry} onChange={(e) => setExpiry(e.target.value)}>
+              <option value="30">In 30 days</option>
+              <option value="90">In 90 days</option>
+              <option value="365">In 1 year</option>
+              <option value="">Never</option>
+            </select>
+          </div>
           {error && !revoking && <p className="field-error" role="alert">{error}</p>}
           <div className="form-card-foot"><Button variant="primary" type="submit" loading={busy === 'create'}><Plus size={16} aria-hidden="true" />Create key</Button></div>
         </form>
@@ -134,6 +144,8 @@ export function Webhooks() {
   const [rowMsg, setRowMsg] = useState({}); // id -> message after an action
   const [log, setLog] = useState({}); // id -> deliveries | 'loading' | error string
   const removeDialog = useRef(null);
+  const [rotating, setRotating] = useState(null);
+  const rotateDialog = useRef(null);
 
   const load = () => apiFetch('/api/webhooks', { method: 'GET' }).then(setData).catch((e) => setLoadError(e.message));
   useEffect(() => { load(); }, []);
@@ -178,6 +190,20 @@ export function Webhooks() {
       setLog((l) => ({ ...l, [id]: Array.isArray(res) ? res : res.deliveries ?? [] }));
     } catch (err) {
       setLog((l) => ({ ...l, [id]: err.message }));
+    }
+  }
+
+  async function rotate() {
+    setBusy('rotate');
+    setError(null);
+    try {
+      const { secret } = await apiFetch(`/api/webhooks/${rotating.id}/secret`);
+      rotateDialog.current?.close();
+      setCreated(secret);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -227,6 +253,9 @@ export function Webhooks() {
                     <Button size="sm" variant="ghost" aria-expanded={entries !== undefined} aria-controls={`log-${w.id}`}
                       onClick={() => (entries === undefined ? loadLog(w.id) : setLog((l) => { const { [w.id]: _, ...rest } = l; return rest; }))}>
                       {entries === undefined ? 'Show deliveries' : 'Hide deliveries'}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setRotating(w); setError(null); rotateDialog.current?.showModal(); }} aria-label={`New signing secret for ${w.url}`}>
+                      <RotateCcw size={14} aria-hidden="true" />New secret
                     </Button>
                     <Button size="sm" variant="danger" onClick={() => { setRemoving(w); setError(null); removeDialog.current?.showModal(); }} aria-label={`Delete webhook ${w.url}`}>
                       <Trash2 size={14} aria-hidden="true" />Delete
@@ -278,7 +307,7 @@ export function Webhooks() {
               </label>
             ))}
           </fieldset>
-          {error && !removing && <p className="field-error" role="alert">{error}</p>}
+          {error && !removing && !rotating && <p className="field-error" role="alert">{error}</p>}
           <div className="form-card-foot"><Button variant="primary" type="submit" loading={busy === 'create'}><Plus size={16} aria-hidden="true" />Add webhook</Button></div>
         </form>
       )}
@@ -288,6 +317,9 @@ export function Webhooks() {
         <pre><code>{VERIFY_SAMPLE}</code></pre>
       </figure>
 
+      <ConfirmDialog dialogRef={rotateDialog} id="hook-rotate-title" title="Replace the signing secret?" icon={RotateCcw}
+        body={rotating ? `The current secret for ${rotating.url} stops working right away. Update your receiver with the new one, shown once.` : ''}
+        action="Replace secret" busy={busy === 'rotate'} error={rotating && error} onConfirm={rotate} onClose={() => setRotating(null)} />
       <ConfirmDialog dialogRef={removeDialog} id="hook-del-title" title="Delete this webhook?"
         body={removing ? `${removing.url} stops getting events, and its delivery log is deleted.` : ''}
         action="Delete webhook" busy={busy === 'delete'} error={removing && error} onConfirm={remove} onClose={() => setRemoving(null)} />

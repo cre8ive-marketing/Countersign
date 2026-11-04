@@ -118,11 +118,13 @@ Data goes to `./data` unless `DATA_DIR` is set.
 | `DATA_DIR` | `./data` (`/data` in Docker) | Where the database and PDFs are stored. |
 | `ALLOW_SIGNUP` | `false` | The first account can always sign up. Set `true` to let anyone create an account. |
 | `ENCRYPTION_KEY` | generated file in `DATA_DIR` | 32-byte AES-256 key as 64 hex characters or base64. Encrypts every PDF and field value. Back it up; changing or losing it makes existing documents unreadable. |
-| `TRUST_PROXY` | `false` | Set `true` behind a reverse proxy so the audit trail, login limits and the /verify limit (60 checks an hour per address) use the client IP from `X-Forwarded-For`. Leave it off when clients connect directly. |
+| `TRUST_PROXY` | `false` | Set `true` behind a reverse proxy so the audit trail, login limits , the /verify limit (60 checks an hour per address) and the public template link limit (10 copies an hour per address) use the client IP from `X-Forwarded-For`. Leave it off when clients connect directly. |
 | `TOKEN_TTL_DAYS` | `30` | How long a signing link stays valid. Reminders and a signer's turn coming up extend it. |
 | `SESSION_IDLE_MINUTES` `SESSION_MAX_DAYS` | `60`, `7` | Sign-in sessions end after this much inactivity, or this long after sign-in. |
 | `LOGIN_MAX_ATTEMPTS` `LOGIN_IP_MAX_ATTEMPTS` | `5`, `50` | Failed sign-ins allowed per account from one address, and per address, within 15 minutes before a 15-minute lock. |
 | `SIGNUP_MAX_PER_HOUR` | `10` | Sign-up attempts allowed per address per hour while sign-ups are open. |
+| `STORAGE_QUOTA_MB` | `1024` | Original PDFs each account may store, counting bulk-send and public-link copies. `0` turns the limit off. |
+| `INVITE_EMAILS_PER_HOUR` | `100` | Team invite emails the whole server sends per hour. Past it, invites are still created and the link is shown to copy. |
 | `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASS` `SMTP_FROM` | unset | Email delivery. Without SMTP, senders copy each signing link from the document page. **Set `APP_URL` too:** emails are not sent without it, because links built from the request's host could be forged. |
 | `SIGNING_P12_BASE64` `SIGNING_P12_PASSPHRASE` | unset | Your own certificate (PKCS#12, base64) for the digital seal on completed PDFs. Without it, Countersign generates a self-signed one once and stores it encrypted as `signing.p12` in `DATA_DIR`. An invalid or expired certificate stops the server at startup. |
 | `WEBHOOK_ALLOW_HTTP` `WEBHOOK_ALLOW_PRIVATE` | `false` | Development and tests only. Allow webhook URLs on plain `http://`, and to private, loopback or link-local addresses. Leave both off in production. |
@@ -137,7 +139,7 @@ Data goes to `./data` unless `DATA_DIR` is set.
 
 ## API and webhooks
 
-Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks, teams or your account, and it never returns signing links. In a team, a key has the same document rights as you (an admin's key can send, void and delete teammates' documents). Each key allows 600 requests an hour.
+Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks, teams or your account, and it never returns signing links. In a team, a key has the same document rights as you (an admin's key can send, void and delete teammates' documents). Each key allows 600 requests an hour. Keys expire after 30 days, 90 days or 1 year, or never (`expiresDays` on `POST /api/api-keys`; the settings page defaults to 90 days). **Sign out of all devices** can also revoke every key.
 
 | Method and path | What it does |
 |---|---|
@@ -151,7 +153,7 @@ Create a key in **Settings → API keys**. It is shown once; send it as `Authori
 
 **Webhooks** (Settings → Webhooks) send a JSON `POST` for `document.sent`, `recipient.viewed`, `recipient.signed`, `recipient.declined`, `document.completed`, `document.declined`, `document.voided` and `document.expired`. The body holds ids, title, status and the recipient's name, email and role, never files, field values or links. Deliveries that do not get a 2xx within 10 seconds are retried 6 more times over about 21 hours; redirects are not followed. After 20 deliveries fail every retry, the webhook is turned off and you get an email. Events can arrive out of order; use `createdAt` in the body. Webhook URLs must be `https://` and may not point to private or internal addresses.
 
-Each request carries `Countersign-Signature: t=<unix seconds>,v1=<hex>`, where `v1` is HMAC-SHA256 of `<t>.<raw body>` keyed with the whole `whsec_…` secret shown when you created the webhook. Check it before trusting the body:
+Each request carries `Countersign-Signature: t=<unix seconds>,v1=<hex>`, where `v1` is HMAC-SHA256 of `<t>.<raw body>` keyed with the whole `whsec_…` secret shown when you created the webhook. **New secret** replaces it; the old one stops working at once. Check it before trusting the body:
 
 ```js
 import crypto from 'node:crypto';
@@ -197,7 +199,7 @@ flowchart LR
 - **Digital seal:** the completed PDF is signed with a certificate so any later change is detectable. A self-signed seal does not identify a person or company, and PDF readers may show its signer as unverified; use your own certificate if that matters.
 - **Expiry:** past its expiry date a document can no longer be viewed, signed or declined, and its links are revoked.
 - **Requests:** every state-changing request is checked for same origin, and every document read or write checks ownership on the server.
-- **API keys:** stored only as keyed hashes, shown once, revocable, rate limited, and refused on account, key and webhook routes. Keys do not expire on their own and are not revoked by signing out; revoke unused keys.
+- **API keys:** stored only as keyed hashes, shown once, revocable, rate limited, and refused on account, key and webhook routes. Keys can expire, and signing out of all devices can revoke them all; a password change does not revoke them.
 - **Webhooks:** secrets are stored encrypted. Each delivery resolves the host itself and refuses loopback, private, link-local and similar addresses at connect time, so DNS tricks cannot reach internal services.
 - **Public links:** anyone with the link can create a copy, so the signer's name and email are only what they typed (the audit trail says so). Copies expire after a day unless the template sets an expiry, each address may submit 10 times an hour, and each link 50 times a day. Turning the link off or issuing a new one stops the old one.
 - **Teams:** each person is in at most one team, as its owner, an admin or a member. Members can open and download the team's documents and use its templates; only the document's owner and the team's owner and admins can edit, send, void or delete; only the document's owner can move it, share it or change its public link. Signing links are never shown to members who can only read. Invite links work once, for one email address, for 7 days. While sign-ups are closed, only the server's first account can create a team, and only its invites can create new accounts. If the first account hands team ownership to someone else, that team's invites stop creating accounts too; people who already have an account can still join. Sharing a document with the team, or making it private again, is written to its audit trail. Leaving or being removed makes your team documents personal again.
