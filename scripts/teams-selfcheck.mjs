@@ -20,7 +20,7 @@ const { default: db, now, tx } = await import('../lib/db.js');
 
 const fault = (fn) => { try { fn(); } catch (e) { return [e.status, e.message]; } return null; };
 const st = (fn) => fault(fn)?.[0] ?? 0;
-const mk = (name) => { const email = `${name.toLowerCase()}@x.io`; return { id: createUser({ email, name, password: 'correct horse battery' }), email, name }; };
+const mk = (name) => { const email = `${name.toLowerCase()}@x.io`; return { id: createUser({ email, name, passwordHash: 'x' }), email, name }; };
 const [own, adm, mem, mem2, out, late] = ['Olga', 'Adam', 'Mia', 'Max', 'Otto', 'Lena'].map(mk);
 const t0 = now();
 const addDoc = (owner, team = null) => {
@@ -50,7 +50,7 @@ assert.notEqual(row.token_hash, crypto.createHash('sha256').update(token).digest
 assert.equal(JSON.stringify(row).includes(token), false, 'token never stored');
 assert.equal(row.email, 'adam@x.io');
 assert.ok(Math.abs(Date.parse(row.expires_at) - Date.now() - 7 * 864e5) < 60e3, 'expires in 7 days');
-assert.deepEqual(T.inviteByToken(token), { teamName: 'Acme', inviterName: 'Olga', email: 'adam@x.io', role: 'admin' });
+assert.deepEqual(T.inviteByToken(token), { teamName: 'Acme', inviterName: 'Olga', email: 'adam@x.io', role: 'admin', canSignUp: true });
 assert.equal(T.inviteByToken('nope'), null);
 assert.equal(T.inviteByToken(42), null);
 assert.equal(st(() => T.createInvite(own, { email: 'bad', role: 'member' })), 400);
@@ -108,7 +108,7 @@ const toOut = T.createInvite(own, { email: out.email }).url.slice(6);
 assert.deepEqual(fault(() => T.acceptInvite(out, toOut)), [409, 'You are already in a team']);
 // joinWithInvite inside signup's transaction: a failed join rolls back the new user.
 const lateTok = T.createInvite(own, { email: 'late2@x.io' }).url.slice(6);
-assert.equal(st(() => tx(() => { const id = createUser({ email: 'wrong@x.io', name: 'W', password: 'correct horse battery' }); T.joinWithInvite({ id, email: 'wrong@x.io' }, lateTok); })), 403);
+assert.equal(st(() => tx(() => { const id = createUser({ email: 'wrong@x.io', name: 'W', passwordHash: 'x' }); T.joinWithInvite({ id, email: 'wrong@x.io' }, lateTok); })), 403);
 assert.equal(db.prepare("SELECT 1 FROM users WHERE email = 'wrong@x.io'").get(), undefined);
 
 // Pending cap.

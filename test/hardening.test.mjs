@@ -173,3 +173,12 @@ test('invite email cap: past the server-wide limit the invite is created and ret
   assert.deepEqual([capped.status, capped.data.emailed, mails], [201, false, 1]);
   assert.ok(capped.data.url.startsWith('/join/'), 'the link is still returned to copy');
 });
+
+test('password change: parallel wrong guesses cannot pass the limit of 5', async () => {
+  const u = await signup();
+  const all = await Promise.all(Array.from({ length: 20 }, () => u('/api/account', { method: 'PATCH', body: { currentPassword: 'wrong password here', newPassword: 'another long password' } })));
+  const count = (code) => all.filter((r) => r.status === code).length;
+  assert.equal(count(200), 0);
+  assert.equal(count(400), 5);
+  assert.equal(count(429), 15);
+});

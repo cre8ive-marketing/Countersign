@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Crown, LogOut, Mail, Plus, Trash2, UserMinus, Users } from 'lucide-react';
-import { withUser } from '../../lib/auth';
+import { signupOpen, withUser } from '../../lib/auth';
 import { canCreateTeam, getTeam } from '../../lib/teams';
 import { mailEnabled } from '../../lib/mail';
 import { apiFetch, formatDate } from '../../lib/client';
@@ -11,12 +11,12 @@ import { ConfirmDialog, OneTimeSecret } from '../../components/DeveloperSettings
 
 export const getServerSideProps = withUser(async (ctx, user) => {
   const { team, members, invites } = getTeam(user);
-  return { props: { user, team: team ?? null, members: members ?? [], invites: invites ?? [], mail: mailEnabled(), canCreate: canCreateTeam(user) } };
+  return { props: { user, team: team ?? null, members: members ?? [], invites: invites ?? [], mail: mailEnabled(), canCreate: canCreateTeam(user), transferStopsInvites: !signupOpen() && canCreateTeam(user) } };
 });
 
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', member: 'Member' };
 
-export default function Team({ user, team, members, invites, mail, canCreate }) {
+export default function Team({ user, team, members, invites, mail, canCreate, transferStopsInvites }) {
   const router = useRouter();
   const refresh = () => router.replace(router.asPath);
   const [busy, setBusy] = useState(null);
@@ -64,7 +64,7 @@ export default function Team({ user, team, members, invites, mail, canCreate }) 
         {error && !confirming && <div className="banner banner-bad" role="alert">{error}</div>}
 
         {team
-          ? <TeamView {...{ user, team, members, invites, mail, busy, run, ask, refresh }} />
+          ? <TeamView {...{ user, team, members, invites, mail, transferStopsInvites, busy, run, ask, refresh }} />
           : canCreate
             ? <CreateTeam run={run} busy={busy} refresh={refresh} />
             : (
@@ -99,7 +99,7 @@ function CreateTeam({ run, busy, refresh }) {
   );
 }
 
-function TeamView({ user, team, members, invites, mail, busy, run, ask, refresh }) {
+function TeamView({ user, team, members, invites, mail, transferStopsInvites, busy, run, ask, refresh }) {
   const isOwner = team.role === 'owner';
   const canManage = isOwner || team.role === 'admin';
   const [name, setName] = useState(team.name);
@@ -114,7 +114,7 @@ function TeamView({ user, team, members, invites, mail, busy, run, ask, refresh 
     if (role === 'owner') {
       return ask({
         title: `Make ${m.name} the owner?`,
-        body: `${m.name} can then delete the team and change roles. You become an admin. Only the new owner can undo this.`,
+        body: `${m.name} can then delete the team and change roles. You become an admin. Only the new owner can undo this.${transferStopsInvites ? ' Sign-ups are closed on this server, so this team’s invite links will stop creating new accounts. People who already have an account can still join.' : ''}`,
         action: 'Transfer ownership', icon: Crown,
         run: () => apiFetch(`/api/teams/members/${m.userId}`, { method: 'PUT', body: { role } }),
       });

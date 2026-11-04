@@ -74,8 +74,8 @@ assert.equal(csvBulkRows('name,email\n' + 'A,a@x.io\n'.repeat(500), 1).length, 5
 assert.equal(status(() => csvBulkRows('A,a@x.io\n'.repeat(501), 1)), 400);
 
 // --- DB-backed: keys, folders, documents list, webhooks.
-const alice = { id: createUser({ email: 'alice@x.io', name: 'Alice', password: 'correct horse battery' }), email: 'alice@x.io', name: 'Alice' };
-const bob = { id: createUser({ email: 'bob@x.io', name: 'Bob', password: 'correct horse battery' }), email: 'bob@x.io', name: 'Bob' };
+const alice = { id: createUser({ email: 'alice@x.io', name: 'Alice', passwordHash: 'x' }), email: 'alice@x.io', name: 'Alice' };
+const bob = { id: createUser({ email: 'bob@x.io', name: 'Bob', passwordHash: 'x' }), email: 'bob@x.io', name: 'Bob' };
 const fakeReq = (headers = {}, method = 'GET') => ({ method, headers: { host: 'app.test', ...headers }, socket: { remoteAddress: '127.0.0.1' }, cookies: {} });
 function fakeRes() {
   const r = { code: 200, headers: {}, body: null, headersSent: false };

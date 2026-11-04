@@ -5,7 +5,7 @@ import db, { tx } from '../../../lib/db';
 import { inviteByToken, joinWithInvite } from '../../../lib/teams';
 
 export default api({
-  POST(req, res) {
+  async POST(req, res) {
     const info = clientInfo(req);
     // Throttled per IP: the 409 below would otherwise be an unlimited account-existence oracle.
     const wait = signupThrottle(info.ip);
@@ -26,7 +26,7 @@ export default api({
     const problem = passwordProblem(password, email);
     if (problem) fail(400, problem);
     if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'An account with this email already exists');
-    const passwordHash = hashPassword(password); // scrypt outside the write lock
+    const passwordHash = await hashPassword(password); // scrypt outside the write lock
     const userId = tx(() => {
       // Re-checked under the lock: closed sign-up only admits invites to a team owned by the first account.
       const open = signupOpen();

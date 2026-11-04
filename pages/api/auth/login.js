@@ -22,7 +22,7 @@ export default api({
     const delay = loginDelayMs(email);
     const locked = recordLoginFailure(email, info.ip);
     if (delay) await new Promise((r) => setTimeout(r, delay));
-    if (!verifyLogin(password, user?.password_hash)) {
+    if (!(await verifyLogin(password, user?.password_hash))) {
       logSecurity('login_failure', { ...info, ...who });
       if (locked) logSecurity('login_locked', { ...info, ...who, detail: `${who.detail ? who.detail + '; ' : ''}limit reached` });
       fail(401, 'Email or password is incorrect');

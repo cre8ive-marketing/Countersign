@@ -522,7 +522,7 @@ function sealOf(bytes) {
 }
 function pdfText(buf) {
   let out = '';
-  for (const m of buf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+  for (const m of buf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\nendstream/g)) {
     let c; try { c = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { c = m[1]; }
     for (const t of c.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) out += Buffer.from(t[1], 'hex').toString('latin1') + '\n';
   }

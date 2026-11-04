@@ -111,10 +111,10 @@ assert.equal(auth.passwordProblem('x'.repeat(12), 'a@b.co'), null);
 assert.equal(auth.passwordProblem('x'.repeat(256), 'a@b.co'), null);
 
 // Login verification never short-circuits for unknown accounts.
-const h = auth.hashPassword('correct horse battery');
-assert.equal(auth.verifyLogin('correct horse battery', h), true);
-assert.equal(auth.verifyLogin('wrong', h), false);
-assert.equal(auth.verifyLogin('anything', undefined), false);
+const h = await auth.hashPassword('correct horse battery');
+assert.equal(await auth.verifyLogin('correct horse battery', h), true);
+assert.equal(await auth.verifyLogin('wrong', h), false);
+assert.equal(await auth.verifyLogin('anything', undefined), false);
 
 // Login limits (M3): the pair account+IP locks after 5; failures from elsewhere never lock the account.
 const P = '9.9.9.9';

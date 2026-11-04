@@ -137,7 +137,7 @@ const auditHeads = (id) => fs.readFileSync(LOG, 'utf8').split(/\r?\n/).filter((l
 function pdfText(buf) {
   const s = buf.toString('latin1');
   let out = '';
-  for (const m of s.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+  for (const m of s.matchAll(/stream\r?\n([\s\S]*?)\nendstream/g)) {
     let c; try { c = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { c = m[1]; }
     for (const t of c.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) out += Buffer.from(t[1], 'hex').toString('latin1') + '\n';
   }
