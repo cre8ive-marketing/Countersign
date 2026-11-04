@@ -9,7 +9,7 @@ const MAX_BYTES = 25 * 1048576;
 
 export default api({
   GET(req, res, user) {
-    res.json(listDocuments(user.id, req.query));
+    res.json(listDocuments(user, req.query));
   },
   async POST(req, res, user) {
     if (!String(req.headers['content-type']).startsWith('application/pdf')) fail(415, 'Upload a PDF file');

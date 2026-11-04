@@ -4,20 +4,36 @@ import Link from 'next/link';
 import { ArrowLeft, Download, Copy, Check, Bell, Ban, LayoutTemplate, Trash2, CircleCheck, Clock, CircleX, Eye, Mail } from 'lucide-react';
 import { withUser } from '../../../../lib/auth';
 import { events, ownedDocument } from '../../../../lib/documents';
+import { teamOf } from '../../../../lib/teams';
+import db from '../../../../lib/db';
 import { mailEnabled } from '../../../../lib/mail';
 import { apiFetch, formatDate, recipientColor, RECIPIENT_STATUS } from '../../../../lib/client';
 import AppShell from '../../../../components/AppShell';
 import { Avatar, Button, StatusBadge } from '../../../../components/ui';
 import PdfPages from '../../../../components/PdfPages';
+import ShareToggle from '../../../../components/ShareToggle';
+import { BulkSend } from '../../../../components/TemplateTools';
 
 export const getServerSideProps = withUser(async (ctx, user) => {
-  const { doc, recipients } = ownedDocument(ctx.params.id, user.id);
-  if (doc.status === 'draft') return { redirect: { destination: `/app/documents/${doc.id}/edit`, permanent: false } };
+  let doc, recipients;
+  try { ({ doc, recipients } = ownedDocument(ctx.params.id, user.id, 'read')); }
+  catch (e) { if (e.status === 404) return { notFound: true }; throw e; }
+  const team = teamOf(user.id);
+  const isOwner = doc.owner_id === user.id;
+  const canWrite = isOwner || (!!doc.team_id && team?.teamId === doc.team_id && (team.role === 'owner' || team.role === 'admin'));
+  // Team members who cannot edit see drafts and templates read-only here instead of in the editor.
+  if (doc.status === 'draft' && canWrite) return { redirect: { destination: `/app/documents/${doc.id}/edit`, permanent: false } };
+  const { public_token_hash, public_token_enc, ...docProps } = doc;
   return {
     props: {
       user,
-      doc: { ...doc },
-      recipients: recipients.map((r) => ({ ...r })),
+      doc: docProps,
+      canWrite,
+      isOwner,
+      inTeam: !!team,
+      ownerName: isOwner ? null : db.prepare('SELECT name FROM users WHERE id = ?').get(doc.owner_id)?.name ?? null,
+      // Signing links let anyone sign as that recipient, so only people who manage the document get them.
+      recipients: recipients.map(({ token, ...r }) => (canWrite ? { ...r, token } : r)),
       events: events(doc.id).map((e) => ({ ...e })),
       mail: mailEnabled(),
       justSent: ctx.query.sent === '1',
@@ -27,7 +43,7 @@ export const getServerSideProps = withUser(async (ctx, user) => {
 
 const STATUS_ICON = { signed: CircleCheck, declined: CircleX, viewed: Eye, sent: Mail, pending: Clock };
 
-export default function DocumentPage({ user, doc, recipients, events, mail, justSent }) {
+export default function DocumentPage({ user, doc, canWrite, isOwner, inTeam, ownerName, recipients, events, mail, justSent }) {
   const router = useRouter();
   const [copied, setCopied] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -62,16 +78,19 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
   const signers = recipients.filter((r) => r.role === 'signer');
   const cc = recipients.filter((r) => r.role === 'cc');
   const completed = doc.status === 'completed';
+  const isTemplate = !!doc.is_template;
+  const isDraft = doc.status === 'draft';
 
   return (
     <AppShell user={user} title={doc.title}>
       <div className="page page-wide">
-        <Link href="/app" className="back-link"><ArrowLeft size={15} aria-hidden="true" />Documents</Link>
+        <Link href={isTemplate ? '/app?view=templates' : '/app'} className="back-link"><ArrowLeft size={15} aria-hidden="true" />{isTemplate ? 'Templates' : 'Documents'}</Link>
         <header className="page-head">
           <div>
-            <div className="title-row"><h1>{doc.title}</h1><StatusBadge status={doc.status} /></div>
+            <div className="title-row"><h1>{doc.title}</h1>{isTemplate ? <span className="badge badge-neutral">Template</span> : <StatusBadge status={doc.status} />}</div>
             <p className="page-sub">
-              Sent {formatDate(doc.sent_at, true)}{completed && ` · Completed ${formatDate(doc.completed_at, true)}`}
+              {ownerName && `Owned by ${ownerName} · `}
+              {isDraft ? 'Read only. The owner or a team admin can edit it.' : <>Sent {formatDate(doc.sent_at, true)}</>}{completed && ` · Completed ${formatDate(doc.completed_at, true)}`}
               {doc.expires_at && !completed && ` · ${doc.status === 'expired' ? 'Expired' : 'Expires'} ${formatDate(doc.expires_at, true)}`}
               {!!doc.require_otp && ' · Signers confirm an email code before signing'}
             </p>
@@ -79,12 +98,22 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
           <div className="head-actions">
             {completed && <Button variant="primary" href={`/api/documents/${doc.id}/file?kind=signed&download=1`}><Download size={16} aria-hidden="true" />Download signed</Button>}
             <Button href={`/api/documents/${doc.id}/file?download=1`}><Download size={16} aria-hidden="true" />Original</Button>
-            <Button onClick={() => run('tpl', async () => {
-              const { id } = await apiFetch(`/api/documents/${doc.id}/copy`, { body: { asTemplate: true } });
-              router.push(`/app/documents/${id}/edit`);
-            })} loading={busy === 'tpl'}><LayoutTemplate size={16} aria-hidden="true" />Save as template</Button>
-            {doc.status === 'sent' && <Button variant="danger" onClick={() => voidDialog.current.showModal()}><Ban size={16} aria-hidden="true" />Void</Button>}
-            {['voided', 'declined', 'expired'].includes(doc.status) && (
+            {isTemplate ? (
+              <>
+                <BulkSend docId={doc.id} roles={recipients} mail={mail} saveFirst={async () => {}} disabled={!!busy} />
+                <Button variant="primary" onClick={() => run('use', async () => {
+                  const { id } = await apiFetch(`/api/documents/${doc.id}/copy`, { body: { asTemplate: false } });
+                  router.push(`/app/documents/${id}/edit`);
+                })} loading={busy === 'use'}><Copy size={16} aria-hidden="true" />Use template</Button>
+              </>
+            ) : canWrite && (
+              <Button onClick={() => run('tpl', async () => {
+                const { id } = await apiFetch(`/api/documents/${doc.id}/copy`, { body: { asTemplate: true } });
+                router.push(`/app/documents/${id}/edit`);
+              })} loading={busy === 'tpl'}><LayoutTemplate size={16} aria-hidden="true" />Save as template</Button>
+            )}
+            {canWrite && doc.status === 'sent' && <Button variant="danger" onClick={() => voidDialog.current.showModal()}><Ban size={16} aria-hidden="true" />Void</Button>}
+            {canWrite && ['voided', 'declined', 'expired'].includes(doc.status) && (
               <Button variant="danger" loading={busy === 'del'} onClick={() => confirm('Delete this document and its audit trail?') && run('del', async () => {
                 await apiFetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
                 router.push('/app');
@@ -102,8 +131,14 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
           </div>
 
           <aside className="detail-side">
+            {isOwner && inTeam && (
+              <section className="card">
+                <h2 className="card-title">Team</h2>
+                <ShareToggle docId={doc.id} initialShared={!!doc.team_id} />
+              </section>
+            )}
             <section className="card">
-              <h2 className="card-title">Signers{doc.sequential ? <span className="card-note">In order</span> : null}</h2>
+              <h2 className="card-title">{isTemplate ? 'Roles' : 'Signers'}{doc.sequential ? <span className="card-note">In order</span> : null}</h2>
               <ol className={`route${doc.sequential ? ' is-sequential' : ''}`}>
                 {signers.map((r) => {
                   const Icon = STATUS_ICON[r.status] ?? Clock;
@@ -114,11 +149,11 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
                       <div className="route-body">
                         <div className="route-name"><strong>{r.name}</strong>{!!doc.sequential && <span className="route-order">#{r.routing_order}</span>}</div>
                         <span className="route-email">{r.email}</span>
-                        <span className={`route-status is-${r.status}`}>
+                        {!isDraft && <span className={`route-status is-${r.status}`}>
                           <Icon size={13} strokeWidth={2} aria-hidden="true" />
                           {RECIPIENT_STATUS[r.status]}
                           {r.signed_at && ` · ${formatDate(r.signed_at, true)}`}
-                        </span>
+                        </span>}
                         {r.declined_reason && <p className="route-reason">“{r.declined_reason}”</p>}
                         {waiting && (
                           <div className="route-actions">
@@ -128,7 +163,7 @@ export default function DocumentPage({ user, doc, recipients, events, mail, just
                                 {copied === r.id ? 'Copied' : 'Copy signing link'}
                               </button>
                             )}
-                            {mail && (
+                            {mail && canWrite && (
                               <button type="button" className="btn btn-secondary btn-sm" disabled={busy === r.id} onClick={() => run(r.id, () => apiFetch(`/api/documents/${doc.id}/remind`, { body: { recipientId: r.id } }), `Reminder sent to ${r.name}.`)}>
                                 <Bell size={13} aria-hidden="true" />Remind
                               </button>

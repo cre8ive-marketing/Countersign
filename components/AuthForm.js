@@ -21,10 +21,11 @@ export function safeNext(next) {
 
 const waitText = (s) => (s < 60 ? `${s} seconds` : `${Math.ceil(s / 60)} minute${Math.ceil(s / 60) === 1 ? '' : 's'}`);
 
-export default function AuthForm({ mode, closed }) {
+// invite: { token, email, teamName } when signing up from a team invite; the email is fixed to the invited address.
+export default function AuthForm({ mode, closed, invite }) {
   const router = useRouter();
   // ?email= comes from the landing page start form.
-  const [form, setForm] = useState(() => ({ name: '', email: typeof router.query.email === 'string' ? router.query.email.slice(0, 254) : '', password: '' }));
+  const [form, setForm] = useState(() => ({ name: '', email: invite?.email ?? (typeof router.query.email === 'string' ? router.query.email.slice(0, 254) : ''), password: '' }));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const summary = useRef(null);
@@ -39,8 +40,8 @@ export default function AuthForm({ mode, closed }) {
     setBusy(true);
     setError(null);
     try {
-      await apiFetch(`/api/auth/${mode}`, { body: form });
-      router.push(safeNext(router.query.next));
+      await apiFetch(`/api/auth/${mode}`, { body: invite ? { ...form, inviteToken: invite.token } : form });
+      router.push(invite ? '/app/team' : safeNext(router.query.next));
     } catch (err) {
       setError(err.status === 429 && err.retryAfter ? `Too many sign-in attempts. Try again in ${waitText(err.retryAfter)}.` : err.message);
       setBusy(false);
@@ -62,21 +63,22 @@ export default function AuthForm({ mode, closed }) {
         <div className="auth-card">
           <div className="auth-mobile-logo"><Logo /></div>
           <h1>{isSignup ? 'Create your account' : 'Welcome back'}</h1>
-          <p className="auth-sub">{isSignup ? 'Start sending documents for signature in minutes.' : 'Sign in to send and manage documents.'}</p>
+          <p className="auth-sub">{invite ? `You will join ${invite.teamName} when your account is created.` : isSignup ? 'Start sending documents for signature in minutes.' : 'Sign in to send and manage documents.'}</p>
           {closed ? (
             <p className="banner banner-bad">Sign-ups are closed on this server. Ask the person who runs it to create an account for you, or to set ALLOW_SIGNUP=true.</p>
           ) : (
             <form onSubmit={submit}>
               {error && <div ref={summary} className="error-summary" role="alert" tabIndex={-1}>{error}</div>}
               {isSignup && <TextField id="name" label="Full name" autoComplete="name" value={form.name} onChange={set('name')} required maxLength={120} />}
-              <TextField id="email" type="email" label="Work email" autoComplete="email" value={form.email} onChange={set('email')} required />
+              <TextField id="email" type="email" label="Work email" autoComplete="email" value={form.email} onChange={set('email')} required
+                readOnly={!!invite} hint={invite ? 'The invite is for this address.' : undefined} />
               <TextField id="password" type="password" label="Password" autoComplete={isSignup ? 'new-password' : 'current-password'} minLength={isSignup ? 12 : undefined} maxLength={isSignup ? 256 : undefined}
                 value={form.password} onChange={set('password')} required hint={isSignup ? 'At least 12 characters.' : undefined} />
               <Button variant="primary" type="submit" loading={busy} className="btn-block">{isSignup ? 'Create account' : 'Sign in'}</Button>
             </form>
           )}
           <p className="auth-switch">
-            {isSignup ? <>Already have an account? <Link href="/login">Sign in</Link></> : <>New here? <Link href="/signup">Create an account</Link></>}
+            {isSignup ? <>Already have an account? <Link href={invite ? `/login?email=${encodeURIComponent(invite.email)}&next=${encodeURIComponent(`/join/${invite.token}`)}` : '/login'}>Sign in</Link></> : <>New here? <Link href="/signup">Create an account</Link></>}
           </p>
         </div>
       </main>

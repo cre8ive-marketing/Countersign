@@ -4,7 +4,7 @@ import { apiFetch, formatDate } from '../lib/client';
 import { Button, TextField } from './ui';
 
 // A secret shown once with a copy button. It lives only in this component's state and is gone after Done.
-function OneTimeSecret({ label, value, onDone }) {
+export function OneTimeSecret({ label, value, onDone }) {
   const [copied, setCopied] = useState(false);
   const ref = useRef(null);
   useEffect(() => { ref.current?.focus(); }, []);
@@ -23,7 +23,7 @@ function OneTimeSecret({ label, value, onDone }) {
   );
 }
 
-function ConfirmDialog({ dialogRef, id, title, body, action, busy, error, onConfirm, onClose }) {
+export function ConfirmDialog({ dialogRef, id, title, body, action, icon: Icon = Trash2, busy, error, onConfirm, onClose }) {
   return (
     <dialog ref={dialogRef} className="dialog" aria-labelledby={id} onClose={onClose}>
       <h2 id={id}>{title}</h2>
@@ -31,7 +31,7 @@ function ConfirmDialog({ dialogRef, id, title, body, action, busy, error, onConf
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="dialog-actions">
         <Button variant="ghost" type="button" onClick={() => dialogRef.current?.close()}>Cancel</Button>
-        <Button variant="danger" type="button" onClick={onConfirm} loading={busy}><Trash2 size={16} aria-hidden="true" />{action}</Button>
+        <Button variant="danger" type="button" onClick={onConfirm} loading={busy}><Icon size={16} aria-hidden="true" />{action}</Button>
       </div>
     </dialog>
   );

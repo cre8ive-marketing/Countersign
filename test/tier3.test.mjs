@@ -295,7 +295,8 @@ test('GET /api/documents: owner only, exact shape, status/template filters, limi
   assert.equal(all.total, 3);
   assert.deepEqual(all.documents.map((d) => d.id).sort(), [d1.id, d2.id, t1.id].sort());
   const one = all.documents.find((d) => d.id === d2.id);
-  assert.deepEqual(Object.keys(one).sort(), ['completedAt', 'createdAt', 'folderId', 'id', 'isTemplate', 'sentAt', 'status', 'title', 'updatedAt']);
+  assert.deepEqual(Object.keys(one).sort(), ['completedAt', 'createdAt', 'folderId', 'id', 'isTemplate', 'ownerName', 'sentAt', 'status', 'teamShared', 'title', 'updatedAt']);
+  assert.deepEqual([one.ownerName, one.teamShared], ['Tier3 Owner', false], 'wave 2 fields: own personal document');
   assert.equal(one.status, 'sent');
   assert.equal(one.isTemplate, false);
   assert.ok(one.sentAt);

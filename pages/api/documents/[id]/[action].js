@@ -1,5 +1,5 @@
 import { api, appUrl, csvBulkRows, fail, readRaw } from '../../../../lib/http';
-import { bulkSend, copyDocument, ownedDocument, remind, sendDocument, setPublicLink, voidDocument } from '../../../../lib/documents';
+import { bulkSend, copyDocument, ownedDocument, remind, sendDocument, setPublicLink, shareDocument, voidDocument } from '../../../../lib/documents';
 import { moveDocument } from '../../../../lib/folders';
 import { rateLimit } from '../../../../lib/auth';
 
@@ -51,13 +51,23 @@ const actions = {
   public(req, res, user, full) {
     res.json(setPublicLink(full, user, Boolean(req.body?.enabled), req));
   },
+  share(req, res, user, full) {
+    if (typeof req.body?.shared !== 'boolean') fail(400, 'Send shared: true or false');
+    res.json(shareDocument(full, user, req.body.shared, req));
+  },
 };
+
+// Access mode per action (see ownedDocument). copy and bulk need only read on a template; copying a non-template needs write.
+const modes = { send: 'write', void: 'write', remind: 'write', copy: 'template', bulk: 'read', move: 'own', public: 'own', share: 'own' };
 
 export default api({
   async POST(req, res, user) {
     const action = Object.hasOwn(actions, req.query.action) && actions[req.query.action];
     if (!action) fail(404, 'Unknown action');
     req.body = await readBody(req);
-    await action(req, res, user, ownedDocument(req.query.id, user.id));
+    const mode = modes[req.query.action];
+    let full = ownedDocument(req.query.id, user.id, mode === 'template' ? 'read' : mode);
+    if (mode === 'template' && !full.doc.is_template) full = ownedDocument(req.query.id, user.id, 'write');
+    await action(req, res, user, full);
   },
 }, { apiKey: true });

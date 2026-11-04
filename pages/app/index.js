@@ -5,9 +5,12 @@ import { Upload, Search, ChevronRight, FileText, LayoutTemplate, PenLine, Folder
 import { withUser } from '../../lib/auth';
 import db from '../../lib/db';
 import { signingToken } from '../../lib/documents';
+import { teamOf } from '../../lib/teams';
 import { apiFetch, formatDate, relativeTime, recipientColor } from '../../lib/client';
 import AppShell from '../../components/AppShell';
 import { Avatar, Button, StatusBadge, TextField } from '../../components/ui';
+
+const SCOPES = [{ id: 'all', label: 'All' }, { id: 'mine', label: 'Mine' }, { id: 'team', label: 'Team' }];
 
 const VIEWS = [
   { id: 'all', label: 'All' },
@@ -25,10 +28,20 @@ export const getServerSideProps = withUser(async (ctx, user) => {
   const folder = typeof ctx.query.folder === 'string' ? folders.find((f) => f.id === ctx.query.folder) : null;
   if (ctx.query.folder && !folder) return { redirect: { destination: isTemplates ? '/app?view=templates' : '/app', permanent: false } };
   const folderId = folder?.id ?? null;
-  const docs = db.prepare(`SELECT id, title, status, updated_at, page_count, expires_at, folder_id FROM documents
-    WHERE owner_id = ? AND is_template = ? AND (? IS NULL OR folder_id = ?) ORDER BY updated_at DESC`).all(user.id, isTemplates ? 1 : 0, folderId, folderId);
+  const team = teamOf(user.id);
+  const teamId = team?.teamId ?? null;
+  const manager = team?.role === 'owner' || team?.role === 'admin';
+  const scope = teamId && ['mine', 'team'].includes(ctx.query.scope) ? ctx.query.scope : 'all';
+  // Mine: documents I own. Team: documents shared with my team (mine included). All: both. Folders are personal, so a folder shows only my documents.
+  const visible = `(d.owner_id = ? OR (? IS NOT NULL AND d.team_id = ?))
+    AND (? <> 'mine' OR d.owner_id = ?) AND (? <> 'team' OR d.team_id = ?)`;
+  const visibleArgs = [user.id, teamId, teamId, scope, user.id, scope, teamId];
+  const docs = db.prepare(`SELECT d.id, d.title, d.status, d.updated_at, d.page_count, d.expires_at, d.folder_id, d.owner_id, d.team_id, u.name AS owner_name
+    FROM documents d JOIN users u ON u.id = d.owner_id
+    WHERE ${visible} AND d.is_template = ? AND (? IS NULL OR (d.folder_id = ? AND d.owner_id = ?)) ORDER BY d.updated_at DESC`)
+    .all(...visibleArgs, isTemplates ? 1 : 0, folderId, folderId, user.id);
   const recips = db.prepare(`SELECT r.document_id, r.name, r.role, r.status, r.position FROM recipients r
-    JOIN documents d ON d.id = r.document_id WHERE d.owner_id = ? ORDER BY r.position`).all(user.id);
+    JOIN documents d ON d.id = r.document_id WHERE ${visible} ORDER BY r.position`).all(...visibleArgs);
   // Only the user's own documents where they are also a signer. Emails are unverified, so matching
   // recipients by email across other owners would hand their signing links to anyone who signs up with that address.
   const action = db.prepare(`SELECT r.*, d.title, d.updated_at AS doc_updated_at FROM recipients r
@@ -44,7 +57,15 @@ export const getServerSideProps = withUser(async (ctx, user) => {
       isTemplates,
       folders: folders.map((f) => ({ id: f.id, name: f.name, count: Number(f.count) })),
       folderId,
-      docs: docs.map((d) => ({ id: d.id, title: d.title, status: d.status, updated_at: d.updated_at, page_count: d.page_count, expires_at: d.expires_at, folderId: d.folder_id ?? null, recipients: byDoc[d.id] ?? [] })),
+      inTeam: !!teamId,
+      scope,
+      docs: docs.map((d) => {
+        const mine = d.owner_id === user.id;
+        return {
+          id: d.id, title: d.title, status: d.status, updated_at: d.updated_at, page_count: d.page_count, expires_at: d.expires_at, folderId: mine ? d.folder_id ?? null : null, recipients: byDoc[d.id] ?? [],
+          mine, ownerName: mine ? null : d.owner_name, teamShared: !!d.team_id, canWrite: mine || manager,
+        };
+      }),
       // Rows whose link is expired or revoked have no token and are left out.
       action: action.map((a) => ({ id: a.document_id, title: a.title, updated_at: a.doc_updated_at, token: signingToken(a) }))
         .filter((a) => a.token),
@@ -53,15 +74,16 @@ export const getServerSideProps = withUser(async (ctx, user) => {
 });
 
 // Keeps the current view and folder together in every link.
-const listHref = (view, folder) => {
+const listHref = (view, folder, scope) => {
   const q = new URLSearchParams();
   if (view && view !== 'all') q.set('view', view);
   if (folder) q.set('folder', folder);
+  if (scope && scope !== 'all') q.set('scope', scope);
   const s = q.toString();
   return s ? `/app?${s}` : '/app';
 };
 
-export default function Documents({ user, isTemplates, folders, folderId, docs, action }) {
+export default function Documents({ user, isTemplates, folders, folderId, inTeam, scope, docs, action }) {
   const router = useRouter();
   const view = isTemplates ? 'templates' : (router.query.view || 'all');
   const folder = folders.find((f) => f.id === folderId);
@@ -132,13 +154,20 @@ export default function Documents({ user, isTemplates, folders, folderId, docs, 
         {error && <div className="banner banner-bad" role="alert">{error}</div>}
 
         <div className="dash">
-          <Folders folders={folders} folderId={folderId} view={view} />
+          <Folders folders={folders} folderId={folderId} view={view} scope={scope} />
           <div className="dash-main">
+            {inTeam && (
+              <nav className="segmented scope-filter" aria-label="Whose documents">
+                {SCOPES.map((sc) => (
+                  <Link key={sc.id} href={listHref(view, folderId, sc.id)} className={scope === sc.id ? 'is-active' : undefined} aria-current={scope === sc.id ? 'page' : undefined}>{sc.label}</Link>
+                ))}
+              </nav>
+            )}
             {!isTemplates && (
               <div className="toolbar">
                 <nav className="tabs" aria-label="Filter documents">
                   {VIEWS.map((v) => (
-                    <Link key={v.id} href={listHref(v.id, folderId)} className={`tab${view === v.id ? ' is-active' : ''}`} aria-current={view === v.id ? 'page' : undefined}>
+                    <Link key={v.id} href={listHref(v.id, folderId, scope)} className={`tab${view === v.id ? ' is-active' : ''}`} aria-current={view === v.id ? 'page' : undefined}>
                       {v.label}{counts[v.id] ? <span className="tab-count">{counts[v.id]}</span> : null}
                     </Link>
                   ))}
@@ -175,13 +204,15 @@ export default function Documents({ user, isTemplates, folders, folderId, docs, 
             ) : (
               <Empty
                 icon={isTemplates ? LayoutTemplate : FileText}
-                title={folder ? 'This folder is empty' : isTemplates ? 'No templates yet' : view === 'all' ? 'Send your first document' : 'Nothing here yet'}
-                body={folder
+                title={scope === 'team' && !folder ? 'Nothing shared with the team yet' : folder ? 'This folder is empty' : isTemplates ? 'No templates yet' : view === 'all' ? 'Send your first document' : 'Nothing here yet'}
+                body={scope === 'team' && !folder
+                  ? 'New documents and templates you create are shared with your team. Open an older one and turn on Share with team to add it.'
+                  : folder
                   ? 'Use Move to folder on any document or template to put it here. New uploads are not filed automatically.'
                   : isTemplates
                     ? 'Upload a PDF you send often, place fields for each role once, and reuse it in two clicks.'
                     : 'Drop a PDF anywhere on this page, or upload one. Add who needs to sign, place fields, and send.'}
-                action={!folder && (view === 'all' || isTemplates) ? <Button variant="primary" onClick={() => input.current.click()}><Upload size={16} aria-hidden="true" />{isTemplates ? 'New template' : 'Upload PDF'}</Button> : null}
+                action={!folder && scope !== 'team' && (view === 'all' || isTemplates) ? <Button variant="primary" onClick={() => input.current.click()}><Upload size={16} aria-hidden="true" />{isTemplates ? 'New template' : 'Upload PDF'}</Button> : null}
               />
             )}
           </div>
@@ -196,14 +227,16 @@ export default function Documents({ user, isTemplates, folders, folderId, docs, 
 function DocRow({ doc, isTemplate, onUse, onMove }) {
   const signers = doc.recipients.filter((r) => r.role === 'signer');
   const signed = signers.filter((r) => r.status === 'signed').length;
-  const href = isTemplate || doc.status === 'draft' ? `/app/documents/${doc.id}/edit` : `/app/documents/${doc.id}`;
+  // Someone who cannot edit a team draft or template opens its read-only page instead of the editor.
+  const href = (isTemplate || doc.status === 'draft') && doc.canWrite ? `/app/documents/${doc.id}/edit` : `/app/documents/${doc.id}`;
+  const owner = doc.ownerName ? `${doc.ownerName} · ` : doc.teamShared ? 'Shared with team · ' : '';
   return (
     <li className="doc-item">
       <Link href={href} className="doc-row">
         <span className="doc-icon"><FileText size={16} strokeWidth={1.75} aria-hidden="true" /></span>
         <span className="doc-main">
           <strong>{doc.title}</strong>
-          <span>{isTemplate ? `${doc.page_count} page${doc.page_count === 1 ? '' : 's'} · ${signers.length} role${signers.length === 1 ? '' : 's'}` : signers.length ? `${signed} of ${signers.length} signed${doc.status === 'sent' && doc.expires_at ? ` · Expires ${formatDate(doc.expires_at)}` : ''}` : 'No recipients yet'}</span>
+          <span>{owner}{isTemplate ? `${doc.page_count} page${doc.page_count === 1 ? '' : 's'} · ${signers.length} role${signers.length === 1 ? '' : 's'}` : signers.length ? `${signed} of ${signers.length} signed${doc.status === 'sent' && doc.expires_at ? ` · Expires ${formatDate(doc.expires_at)}` : ''}` : 'No recipients yet'}</span>
         </span>
         <span className="avatars" aria-label={signers.map((s) => s.name).join(', ')}>
           {signers.slice(0, 4).map((s) => <Avatar key={s.position} name={s.name} color={recipientColor(s.position)} />)}
@@ -214,9 +247,11 @@ function DocRow({ doc, isTemplate, onUse, onMove }) {
           ? <button type="button" className="btn btn-secondary btn-sm" onClick={(e) => { e.preventDefault(); onUse(); }}>Use</button>
           : <ChevronRight size={16} className="doc-chevron" aria-hidden="true" />}
       </Link>
-      <button type="button" className="icon-btn doc-move" onClick={onMove} aria-label={`Move ${doc.title} to a folder`} title="Move to folder">
-        <FolderInput size={16} strokeWidth={1.75} />
-      </button>
+      {doc.mine ? (
+        <button type="button" className="icon-btn doc-move" onClick={onMove} aria-label={`Move ${doc.title} to a folder`} title="Move to folder">
+          <FolderInput size={16} strokeWidth={1.75} />
+        </button>
+      ) : <span className="doc-move doc-move-spacer" aria-hidden="true" />}
     </li>
   );
 }
@@ -232,7 +267,7 @@ function Empty({ icon: Icon = FileText, title, body, action }) {
   );
 }
 
-function Folders({ folders, folderId, view }) {
+function Folders({ folders, folderId, view, scope }) {
   const router = useRouter();
   const [editing, setEditing] = useState(null); // { id?, name }
   const [removing, setRemoving] = useState(null);
@@ -261,7 +296,7 @@ function Folders({ folders, folderId, view }) {
       } else {
         const { id } = await apiFetch('/api/folders', { body });
         editDialog.current?.close();
-        router.push(listHref(view, id));
+        router.push(listHref(view, id, scope));
       }
     } catch (err) {
       setFormError(err.message);
@@ -276,7 +311,7 @@ function Folders({ folders, folderId, view }) {
     try {
       await apiFetch(`/api/folders/${removing.id}`, { method: 'DELETE' });
       deleteDialog.current?.close();
-      router.push(listHref(view, removing.id === folderId ? null : folderId));
+      router.push(listHref(view, removing.id === folderId ? null : folderId, scope));
     } catch (err) {
       setFormError(err.message);
     } finally {
@@ -292,13 +327,13 @@ function Folders({ folders, folderId, view }) {
       </div>
       <ul className="folder-list">
         <li>
-          <Link href={listHref(view, null)} className={`folder-item${!folderId ? ' is-active' : ''}`} aria-current={!folderId ? 'page' : undefined}>
+          <Link href={listHref(view, null, scope)} className={`folder-item${!folderId ? ' is-active' : ''}`} aria-current={!folderId ? 'page' : undefined}>
             <Folder size={15} strokeWidth={1.75} aria-hidden="true" /><span className="folder-name">All</span>
           </Link>
         </li>
         {folders.map((f) => (
           <li key={f.id}>
-            <Link href={listHref(view, f.id)} className={`folder-item${f.id === folderId ? ' is-active' : ''}`} aria-current={f.id === folderId ? 'page' : undefined}>
+            <Link href={listHref(view, f.id, scope)} className={`folder-item${f.id === folderId ? ' is-active' : ''}`} aria-current={f.id === folderId ? 'page' : undefined}>
               <Folder size={15} strokeWidth={1.75} aria-hidden="true" /><span className="folder-name">{f.name}</span>
               <span className="folder-count"><span className="sr-only">, </span>{f.count}<span className="sr-only"> item{f.count === 1 ? '' : 's'}</span></span>
             </Link>

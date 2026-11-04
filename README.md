@@ -61,7 +61,7 @@ A guided walkthrough jumps from field to field. Signers **type** a signature in 
 When the last person signs, every field is flattened into the PDF and a **certificate of completion** is appended: signers, timestamps, IP addresses, the original file's SHA-256 and the full audit trail. The finished PDF then gets a **digital seal** (a PKCS#7 signature over the whole file), so PDF readers can show whether it was changed afterwards. Anyone with a copy can check it on the public **/verify** page: the file is fingerprinted (SHA-256) in their browser and never uploaded.
 
 ### Manage
-A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time. **Contacts** fill in as you send (or import a CSV) and are suggested while you type recipients. Edit the **invite and completion emails** with placeholders such as `{{receiver_name}}` and `{{document_title}}`; the signing button is always added. File documents and templates into **folders**. Connect other systems with personal **API keys** and signed **webhooks**.
+A dashboard with *Needs your signature*, *Waiting for others*, *Completed* and *Drafts*. Copy signing links, send reminders, let signers decline with a reason, and void a document at any time. **Contacts** fill in as you send (or import a CSV) and are suggested while you type recipients. Edit the **invite and completion emails** with placeholders such as `{{receiver_name}}` and `{{document_title}}`; the signing button is always added. File documents and templates into **folders**. Connect other systems with personal **API keys** and signed **webhooks**. Work as a **team**: invite people by link, share documents and templates with everyone in it, and give admins control over the team's documents.
 
 </td>
 </tr>
@@ -137,7 +137,7 @@ Data goes to `./data` unless `DATA_DIR` is set.
 
 ## API and webhooks
 
-Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks or your account, and it never returns signing links. Each key allows 600 requests an hour.
+Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks, teams or your account, and it never returns signing links. In a team, a key has the same document rights as you (an admin's key can send, void and delete teammates' documents). Each key allows 600 requests an hour.
 
 | Method and path | What it does |
 |---|---|
@@ -200,6 +200,7 @@ flowchart LR
 - **API keys:** stored only as keyed hashes, shown once, revocable, rate limited, and refused on account, key and webhook routes. Keys do not expire on their own and are not revoked by signing out; revoke unused keys.
 - **Webhooks:** secrets are stored encrypted. Each delivery resolves the host itself and refuses loopback, private, link-local and similar addresses at connect time, so DNS tricks cannot reach internal services.
 - **Public links:** anyone with the link can create a copy, so the signer's name and email are only what they typed (the audit trail says so). Copies expire after a day unless the template sets an expiry, each address may submit 10 times an hour, and each link 50 times a day. Turning the link off or issuing a new one stops the old one.
+- **Teams:** each person is in at most one team, as its owner, an admin or a member. Members can open and download the team's documents and use its templates; only the document's owner and the team's owner and admins can edit, send, void or delete; only the document's owner can move it, share it or change its public link. Signing links are never shown to members who can only read. Invite links work once, for one email address, for 7 days. While sign-ups are closed, only the server's first account can create a team, and only its invites can create new accounts. If the first account hands team ownership to someone else, that team's invites stop creating accounts too; people who already have an account can still join. Sharing a document with the team, or making it private again, is written to its audit trail. Leaving or being removed makes your team documents personal again.
 - **Audit trail:** every action (upload, send, email, view, sign, decline, void, reminder) is recorded with time, IP and browser. Entries form a keyed hash chain per document. The certificate prints the chain head, the completion entry records both PDF hashes, and deleting a document keeps an encrypted record of its trail.
 
 ### Standards and audits
@@ -213,7 +214,7 @@ Countersign is software you run, so it can't hold certifications itself. ISO/IEC
 - No two-factor sign-in, email verification or encryption-key rotation yet.
 - Text typed into fields supports Latin-1 characters only (Devanagari or CJK print as `?`). Signatures are images and are not affected.
 - Each document, including each bulk or public-link copy, stores its own encrypted copy of the PDF, so large templates sent to many people use a lot of disk.
-- Not built yet: teams and roles, API key scopes, custom branding, SSO.
+- Not built yet: API key scopes, custom branding, SSO.
 
 Found a vulnerability? Please report it privately as described in [`SECURITY.md`](SECURITY.md).
 

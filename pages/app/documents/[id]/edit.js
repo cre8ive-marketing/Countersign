@@ -5,16 +5,23 @@ import { useRouter } from 'next/router';
 import { ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown, Send, Check, UserRound, PenLine, X } from 'lucide-react';
 import { withUser } from '../../../../lib/auth';
 import { ownedDocument, publicUrlFor } from '../../../../lib/documents';
+import { teamOf } from '../../../../lib/teams';
 import { mailEnabled } from '../../../../lib/mail';
 import { apiFetch, cleanOptions, FIELD_META, recipientColor, redirectUrlError } from '../../../../lib/client';
 import { Button } from '../../../../components/ui';
 import ContactInput from '../../../../components/ContactInput';
 import { BulkSend, PublicLink } from '../../../../components/TemplateTools';
 import PdfPages from '../../../../components/PdfPages';
+import ShareToggle from '../../../../components/ShareToggle';
 
 export const getServerSideProps = withUser(async (ctx, user) => {
-  const { doc, recipients, fields } = ownedDocument(ctx.params.id, user.id);
-  if (doc.status !== 'draft') return { redirect: { destination: `/app/documents/${doc.id}`, permanent: false } };
+  let doc, recipients, fields;
+  try { ({ doc, recipients, fields } = ownedDocument(ctx.params.id, user.id, 'read')); }
+  catch (e) { if (e.status === 404) return { notFound: true }; throw e; }
+  const team = teamOf(user.id);
+  const isOwner = doc.owner_id === user.id;
+  const canWrite = isOwner || (!!doc.team_id && team?.teamId === doc.team_id && (team.role === 'owner' || team.role === 'admin'));
+  if (doc.status !== 'draft' || !canWrite) return { redirect: { destination: `/app/documents/${doc.id}`, permanent: false } };
   return {
     props: {
       user,
@@ -22,8 +29,10 @@ export const getServerSideProps = withUser(async (ctx, user) => {
       doc: {
         id: doc.id, title: doc.title, message: doc.message, sequential: !!doc.sequential, reminderDays: doc.reminder_days, isTemplate: !!doc.is_template,
         requireOtp: !!doc.require_otp, expireDays: doc.expire_days ?? 0, redirectUrl: doc.redirect_url ?? '',
-        publicUrl: doc.is_template ? publicUrlFor(doc) ?? null : null,
+        publicUrl: isOwner && doc.is_template ? publicUrlFor(doc) ?? null : null,
+        isOwner, teamShared: !!doc.team_id,
       },
+      inTeam: !!team,
       initialRecipients: recipients.map((r) => ({ id: r.id, name: r.name, email: r.email, role: r.role })),
       initialFields: fields.map((f) => ({ id: f.id, recipientId: f.recipient_id, type: f.type, page: f.page, x: f.x, y: f.y, w: f.w, h: f.h, required: !!f.required, label: f.label, options: f.options })),
     },
@@ -34,7 +43,7 @@ const tempId = () => `t${Math.random().toString(36).slice(2, 10)}`;
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 const EXPIRY_CHOICES = [0, 7, 14, 30, 60, 90];
 
-export default function Editor({ user, mail, doc, initialRecipients, initialFields }) {
+export default function Editor({ user, mail, doc, inTeam, initialRecipients, initialFields }) {
   const router = useRouter();
   const [title, setTitle] = useState(doc.title);
   const [message, setMessage] = useState(doc.message);
@@ -202,7 +211,7 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
   return (
     <div className="editor">
       <Head><title>{`Prepare ${title} · Countersign`}</title></Head>
-      <header className={`editor-bar${doc.isTemplate ? ' is-template' : ''}`}>
+      <header className={`editor-bar${doc.isTemplate ? ' is-template' : ''}${doc.isOwner && inTeam ? ' has-share' : ''}`}>
         <Link href={doc.isTemplate ? '/app?view=templates' : '/app'} className="icon-btn" aria-label="Back to documents"><ArrowLeft size={18} strokeWidth={1.75} /></Link>
         <div className="editor-title">
           <label htmlFor="doc-title" className="sr-only">Document title</label>
@@ -211,10 +220,11 @@ export default function Editor({ user, mail, doc, initialRecipients, initialFiel
         </div>
         {doc.isTemplate && <span className="badge badge-neutral">Template</span>}
         <div className="editor-bar-actions">
+          {doc.isOwner && inTeam && <ShareToggle docId={doc.id} initialShared={doc.teamShared} />}
           <Button variant="ghost" onClick={discard} aria-label={doc.isTemplate ? 'Delete template' : 'Delete draft'} title={doc.isTemplate ? 'Delete template' : 'Delete draft'}><Trash2 size={16} strokeWidth={1.75} /></Button>
           {doc.isTemplate && (
             <>
-              <PublicLink docId={doc.id} initialUrl={doc.publicUrl} eligible={recipients.length === 1 && recipients[0].role === 'signer'} saveFirst={saveFirst} disabled={!!sending} />
+              {doc.isOwner && <PublicLink docId={doc.id} initialUrl={doc.publicUrl} eligible={recipients.length === 1 && recipients[0].role === 'signer'} saveFirst={saveFirst} disabled={!!sending} />}
               <BulkSend docId={doc.id} roles={recipients} mail={mail} saveFirst={saveFirst} disabled={!!sending} />
             </>
           )}
