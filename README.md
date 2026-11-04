@@ -139,7 +139,7 @@ Data goes to `./data` unless `DATA_DIR` is set.
 
 ## API and webhooks
 
-Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks, teams or your account, and it never returns signing links. In a team, a key has the same document rights as you (an admin's key can send, void and delete teammates' documents). Each key allows 600 requests an hour. Keys expire after 30 days, 90 days or 1 year, or never (`expiresDays` on `POST /api/api-keys`; the settings page defaults to 90 days). **Sign out of all devices** can also revoke every key, and changing your password always does.
+Create a key in **Settings → API keys**. It is shown once; send it as `Authorization: Bearer cs_…`. A key acts as your account on document and folder routes only. It cannot manage keys, webhooks, teams or your account, and it never returns signing links. In a team, a key has the same document rights as you (an admin's key can send, void and delete teammates' documents). Each key allows 600 requests an hour. A key is read-only or read and write (`scope` on `POST /api/api-keys`: `read` or `write`; default `write`, and the settings page defaults to read-only). A read-only key gets 403 on anything but `GET`. Keys expire after 30 days, 90 days or 1 year, or never (`expiresDays` on `POST /api/api-keys`; the settings page defaults to 90 days). **Sign out of all devices** can also revoke every key, and changing your password always does.
 
 | Method and path | What it does |
 |---|---|
@@ -216,7 +216,7 @@ Countersign is software you run, so it can't hold certifications itself. ISO/IEC
 - No two-factor sign-in, email verification or encryption-key rotation yet.
 - Text typed into fields supports Latin-1 characters only (Devanagari or CJK print as `?`). Signatures are images and are not affected.
 - Each document, including each bulk or public-link copy, stores its own encrypted copy of the PDF, so large templates sent to many people use a lot of disk.
-- Not built yet: API key scopes, custom branding, SSO.
+- Not built yet: custom branding, SSO.
 
 Found a vulnerability? Please report it privately as described in [`SECURITY.md`](SECURITY.md).
 

@@ -42,6 +42,7 @@ export function ApiKeys() {
   const [loadError, setLoadError] = useState(null);
   const [name, setName] = useState('');
   const [expiry, setExpiry] = useState('90'); // days, or '' for never
+  const [scope, setScope] = useState('read');
   const [created, setCreated] = useState(null); // the full key, shown once
   const [revoking, setRevoking] = useState(null);
   const [busy, setBusy] = useState(null); // 'create' | 'revoke'
@@ -56,7 +57,7 @@ export function ApiKeys() {
     setBusy('create');
     setError(null);
     try {
-      const { key } = await apiFetch('/api/api-keys', { body: { name, expiresDays: expiry ? Number(expiry) : null } });
+      const { key } = await apiFetch('/api/api-keys', { body: { name, expiresDays: expiry ? Number(expiry) : null, scope } });
       setCreated(key);
       setName('');
       await load();
@@ -96,7 +97,7 @@ export function ApiKeys() {
               <KeyRound size={16} strokeWidth={1.75} aria-hidden="true" />
               <div className="dev-main">
                 <strong>{k.name}</strong>
-                <span><code>{k.prefix}…</code> · Created {formatDate(k.createdAt)} · {k.lastUsedAt ? `Last used ${formatDate(k.lastUsedAt, true)}` : 'Never used'} · {!k.expiresAt ? 'Never expires' : Date.parse(k.expiresAt) <= Date.now() ? 'Expired' : `Expires ${formatDate(k.expiresAt)}`}</span>
+                <span><code>{k.prefix}…</code> · {k.scope === 'read' ? 'Read only' : 'Read and write'} · Created {formatDate(k.createdAt)} · {k.lastUsedAt ? `Last used ${formatDate(k.lastUsedAt, true)}` : 'Never used'} · {!k.expiresAt ? 'Never expires' : Date.parse(k.expiresAt) <= Date.now() ? 'Expired' : `Expires ${formatDate(k.expiresAt)}`}</span>
               </div>
               <Button variant="danger" size="sm" onClick={() => { setRevoking(k); setError(null); revokeDialog.current?.showModal(); }} aria-label={`Revoke ${k.name}`}>
                 <Trash2 size={14} aria-hidden="true" />Revoke
@@ -109,6 +110,13 @@ export function ApiKeys() {
       {created ? <OneTimeSecret label="API key" value={created} onDone={() => setCreated(null)} /> : (
         <form className="dev-form" onSubmit={create}>
           <TextField id="key-name" label="New key name" placeholder="e.g. CRM sync" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required autoComplete="off" />
+          <div className="field">
+            <label htmlFor="key-scope">Access</label>
+            <select id="key-scope" className="input" value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="read">Read only: list and download</option>
+              <option value="write">Read and write: also upload, send, void and delete</option>
+            </select>
+          </div>
           <div className="field">
             <label htmlFor="key-expiry">Expires</label>
             <select id="key-expiry" className="input" value={expiry} onChange={(e) => setExpiry(e.target.value)}>

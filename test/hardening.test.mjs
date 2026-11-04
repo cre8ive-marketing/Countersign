@@ -182,3 +182,28 @@ test('password change: parallel wrong guesses cannot pass the limit of 5', async
   assert.equal(count(400), 5);
   assert.equal(count(429), 15);
 });
+
+test('API key scopes: read keys only GET, write keys keep full rights, default is write, bad scope is 400', async () => {
+  const u = await signup();
+  for (const bad of ['admin', '', 1, true]) assert.deepEqual(err(await u('/api/api-keys', { body: { name: 'x', scope: bad } })), [400, 'scope must be read or write'], String(bad));
+  const made = (await u('/api/api-keys', { body: { name: 'default' } })).data;
+  assert.equal(made.scope, 'write');
+  const read = (await u('/api/api-keys', { body: { name: 'ro', scope: 'read' } })).data;
+  assert.equal(read.scope, 'read');
+  assert.deepEqual((await u('/api/api-keys', { method: 'GET' })).data.keys.map((k) => [k.name, k.scope]).sort(), [['default', 'write'], ['ro', 'read']]);
+  const doc = (await uploadPdf(bearer(made.key))).data.id;
+  assert.ok(doc, 'write key uploads');
+  const ro = bearer(read.key);
+  const RO = [403, 'This API key is read-only'];
+  assert.equal((await list(ro)).status, 200);
+  assert.equal((await ro(`/api/documents/${doc}`, { method: 'GET' })).status, 200);
+  assert.equal((await ro(`/api/documents/${doc}/file`, { method: 'GET' })).status, 200);
+  assert.equal((await ro('/api/folders', { method: 'GET' })).status, 200);
+  assert.deepEqual(err(await uploadPdf(ro)), RO);
+  assert.deepEqual(err(await ro(`/api/documents/${doc}`, { method: 'PUT', body: { title: 'x' } })), RO);
+  assert.deepEqual(err(await ro(`/api/documents/${doc}/send`)), RO);
+  assert.deepEqual(err(await ro(`/api/documents/${doc}/copy`, { body: {} })), RO);
+  assert.deepEqual(err(await ro(`/api/documents/${doc}`, { method: 'DELETE' })), RO);
+  assert.deepEqual(err(await ro('/api/folders', { body: { name: 'x' } })), RO);
+  assert.equal((await list(bearer(made.key))).data.documents.length, 1, 'nothing changed');
+});
