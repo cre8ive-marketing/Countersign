@@ -794,7 +794,7 @@ test('email templates in mail: invite, manual reminder ("Reminder: "), completed
   const inv = await mailTo(ra.email, (m) => m.subject.startsWith('Sign '), 'custom invite');
   assert.equal(inv.subject, `Sign ${d.title} for Tess Owner {{bogus}}`);
   const text = textPart(inv);
-  assert.match(text, new RegExp(`Hello Ada Recipient,<b>bold</b> from ${a.email.replace(/[.]/g, '\\.')}\\.\\n\\n"Please review"\\nMsg=Please review Exp=[A-Z][a-z]+ \\d{1,2}, \\d{4} \\{\\{unknown\\}\\}`), text);
+  assert.match(text, new RegExp(`Hello Ada Recipient,<b>bold</b> from ${a.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.\\n\\n"Please review"\\nMsg=Please review Exp=[A-Z][a-z]+ \\d{1,2}, \\d{4} \\{\\{unknown\\}\\}`), text);
   assert.ok(text.includes(`Review and sign: ${APP_URL}/sign/${d.tokens[0]}`), 'system action link always added');
   assert.ok(htmlPart(inv).includes('&#60;b&#62;bold&#60;/b&#62;') && !htmlPart(inv).includes('<b>bold'), 'template HTML is escaped');
   assert.ok(htmlPart(inv).includes(`href="${APP_URL}/sign/${d.tokens[0]}"`));

@@ -108,7 +108,7 @@ function Verify({ token, doc, sender, maskedEmail }) {
     setBusy('send');
     setError(null);
     try {
-      const { sentTo: to } = await apiFetch(`/api/sign/${token}/otp`, { body: { action: 'send' } });
+      const { sentTo: to } = await apiFetch(`/api/sign/${encodeURIComponent(token)}/otp`, { body: { action: 'send' } });
       setSentTo(to || maskedEmail || 'your email');
       setCode('');
       setWait(CODE_COOLDOWN);
@@ -127,7 +127,7 @@ function Verify({ token, doc, sender, maskedEmail }) {
     setBusy('verify');
     setError(null);
     try {
-      await apiFetch(`/api/sign/${token}/otp`, { body: { action: 'verify', code } });
+      await apiFetch(`/api/sign/${encodeURIComponent(token)}/otp`, { body: { action: 'verify', code } });
       window.location.reload(); // the server now sees the verification cookie and returns the document
     } catch (err) {
       setError(err.message);
@@ -259,7 +259,7 @@ function Signing({ token, doc, sender, me, fields, saved, onDone }) {
     setBusy(true);
     setError(null);
     try {
-      const { status, redirectUrl } = await apiFetch(`/api/sign/${token}`, { body: { values } });
+      const { status, redirectUrl } = await apiFetch(`/api/sign/${encodeURIComponent(token)}`, { body: { values } });
       onDone(status === 'completed' ? 'completed' : 'waiting', redirectUrl);
     } catch (e) {
       setError(e.message);
@@ -271,7 +271,7 @@ function Signing({ token, doc, sender, me, fields, saved, onDone }) {
     e.preventDefault();
     setBusy(true);
     try {
-      await apiFetch(`/api/sign/${token}/decline`, { body: { reason } });
+      await apiFetch(`/api/sign/${encodeURIComponent(token)}/decline`, { body: { reason } });
       declineDialog.current?.close();
       onDone('declined');
     } catch (err) {

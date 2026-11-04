@@ -4,9 +4,11 @@
 //   BASE_URL=http://localhost:3492 DATA_DIR=<server's DATA_DIR> node --test test/hardening.test.mjs
 // DATA_DIR enables the checks that age a key or fill the quota in the server's database; without it they skip.
 // The quota test expects the default STORAGE_QUOTA_MB (1024).
+// The invite email cap test needs DATA_DIR, QA_SMTP_SINK_PORT and a server with SMTP_HOST=127.0.0.1 SMTP_PORT=<same> APP_URL=<BASE_URL>.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import net from 'node:net';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { PDFDocument } from 'pdf-lib';
@@ -119,4 +121,55 @@ test('storage quota: uploads and copies past STORAGE_QUOTA_MB get 413; deleting 
   assert.equal((await uploadPdf(await signup())).status, 201, 'other accounts are not affected');
   assert.equal((await u(`/api/documents/${docId}`, { method: 'DELETE' })).status, 200);
   assert.equal((await uploadPdf(u)).status, 201, 'space is free again');
+});
+
+test('password change revokes every API key and keeps this session; a failed change revokes nothing', async () => {
+  const u = await signup();
+  const { key } = (await u('/api/api-keys', { body: { name: 'k' } })).data;
+  const change = (currentPassword) => u('/api/account', { method: 'PATCH', body: { currentPassword, newPassword: `new horse battery ${rnd()}` } });
+  assert.equal((await change('wrong password here')).status, 400);
+  assert.equal((await list(bearer(key))).status, 200, 'a failed change leaves the key alone');
+  assert.equal((await change('correct horse battery')).status, 200);
+  assert.deepEqual(err(await list(bearer(key))), [401, 'Invalid API key']);
+  assert.deepEqual((await u('/api/api-keys', { method: 'GET' })).data.keys, [], 'key is gone from the list; session still works');
+});
+
+test('invite email cap: past the server-wide limit the invite is created and returned, but no mail goes out', { skip: (NEEDS_DB || !process.env.QA_SMTP_SINK_PORT) && 'needs DATA_DIR, QA_SMTP_SINK_PORT and a server with SMTP' }, async (t) => {
+  let mails = 0;
+  // Smallest SMTP that nodemailer accepts: counts each message.
+  const sink = net.createServer((c) => {
+    let data = false, buf = '';
+    c.on('error', () => {});
+    const CRLF = String.fromCharCode(13, 10);
+    c.write('220 sink' + CRLF);
+    c.on('data', (d) => {
+      buf += d.toString('latin1');
+      if (data) {
+        if (!buf.endsWith(CRLF + '.' + CRLF)) return;
+        data = false; buf = ''; mails++; c.write('250 ok' + CRLF);
+        return;
+      }
+      while (buf.includes(CRLF) && !data) {
+        const i = buf.indexOf(CRLF), cmd = buf.slice(0, i).toUpperCase();
+        buf = buf.slice(i + 2);
+        if (cmd === 'DATA') { data = true; c.write('354 go' + CRLF); }
+        else if (cmd === 'QUIT') { c.end('221 bye' + CRLF); }
+        else c.write('250 ok' + CRLF);
+      }
+    });
+  });
+  await new Promise((res) => sink.listen(Number(process.env.QA_SMTP_SINK_PORT), '127.0.0.1', res));
+  const unlock = () => db().prepare("DELETE FROM login_attempts WHERE key = 'team-invite-mail'").run();
+  t.after(() => { unlock(); sink.close(); });
+  unlock(); // other tests on this server may have used up the hour
+  const u = await signup();
+  assert.equal((await u('/api/teams', { body: { name: 'Cap' } })).status, 201);
+  const invite = () => u('/api/teams/invites', { body: { email: `cap-${rnd()}@example.com`, role: 'member' } });
+  const open = await invite();
+  assert.deepEqual([open.status, open.data.emailed, mails], [201, true, 1]);
+  const t0 = new Date().toISOString();
+  db().prepare('INSERT OR REPLACE INTO login_attempts (key, window_start, count, locked_until) VALUES (?, ?, ?, ?)').run('team-invite-mail', t0, 100, new Date(Date.now() + 36e5).toISOString());
+  const capped = await invite();
+  assert.deepEqual([capped.status, capped.data.emailed, mails], [201, false, 1]);
+  assert.ok(capped.data.url.startsWith('/join/'), 'the link is still returned to copy');
 });

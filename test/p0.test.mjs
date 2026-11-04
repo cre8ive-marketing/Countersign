@@ -152,7 +152,7 @@ test('password change: needs the current password, enforces policy, revokes othe
   if (DATA) {
     const ev = securityEvents('password_change', a.email);
     assert.equal(ev.length, 1);
-    assert.match(ev[0].detail, /^1 other sessions revoked$/);
+    assert.match(ev[0].detail, /^1 other sessions and 0 API keys revoked$/);
   }
 });
 

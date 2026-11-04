@@ -65,7 +65,7 @@ export default function Settings({ user, server }) {
         </form>
 
         <form className="card form-card" onSubmit={(e) => { e.preventDefault(); save('password', { currentPassword, newPassword }); }}>
-          <div className="form-card-head"><h2>Password</h2><p>Changing it signs you out on your other devices.</p></div>
+          <div className="form-card-head"><h2>Password</h2><p>Changing it signs you out on your other devices and revokes all your API keys.</p></div>
           <TextField id="cur" type="password" label="Current password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrent(e.target.value)} required />
           <TextField id="new" type="password" label="New password" autoComplete="new-password" minLength={12} maxLength={256} value={newPassword} onChange={(e) => setNew(e.target.value)} required hint="At least 12 characters." />
           <div className="form-card-foot">{msg('password')}<Button variant="primary" type="submit" loading={state.password === 'busy'}>Change password</Button></div>
