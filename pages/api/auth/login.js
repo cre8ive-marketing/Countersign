@@ -23,7 +23,10 @@ export default api({
     const delay = loginDelayMs(email);
     const locked = recordLoginFailure(email, info.ip);
     if (delay) await new Promise((r) => setTimeout(r, delay));
-    if (!(await verifyLogin(password, user?.password_hash))) {
+    const correct = await verifyLogin(password, user?.password_hash);
+    // The wait above is long enough for a reset to finish, and this password must not outlive it.
+    const current = user && db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id)?.password_hash === user.password_hash;
+    if (!correct || !current) {
       logSecurity('login_failure', { ...info, ...who });
       if (locked) logSecurity('login_locked', { ...info, ...who, detail: `${who.detail ? who.detail + '; ' : ''}limit reached` });
       fail(401, 'Email or password is incorrect');

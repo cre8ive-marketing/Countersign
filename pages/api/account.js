@@ -1,6 +1,6 @@
 import { api, clientInfo, fail, str } from '../../lib/http';
 import {
-  clearPasswordCheckFailures, hashPassword, passwordCheckLockedFor, passwordProblem, recordPasswordCheckFailure, revokeOtherSessions, verifyPassword,
+  clearPasswordCheckFailures, dropResetTokens, hashPassword, passwordCheckLockedFor, passwordProblem, recordPasswordCheckFailure, revokeOtherSessions, verifyPassword,
 } from '../../lib/auth';
 import { revokeAllKeys } from '../../lib/apikeys';
 import { pauseAllWebhooks } from '../../lib/webhooks';
@@ -29,7 +29,11 @@ export default api({
       clearPasswordCheckFailures(user.id);
       const problem = passwordProblem(newPassword, user.email);
       if (problem) fail(400, problem);
-      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(newPassword), user.id);
+      const hash = await hashPassword(newPassword);
+      // A reset may have finished during the waits above.
+      if (db.prepare('SELECT password_hash FROM users WHERE id = ?').get(user.id)?.password_hash !== row.password_hash) fail(400, 'Current password is incorrect');
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, user.id);
+      dropResetTokens(user.id);
       const revoked = revokeOtherSessions(req, user.id);
       const keys = revokeAllKeys(user, info);
       pauseAllWebhooks(user, info);

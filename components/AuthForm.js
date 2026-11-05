@@ -21,6 +21,27 @@ export function safeNext(next) {
 
 const waitText = (s) => (s < 60 ? `${s} seconds` : `${Math.ceil(s / 60)} minute${Math.ceil(s / 60) === 1 ? '' : 's'}`);
 
+export function AuthShell({ children }) {
+  return (
+    <div className="auth">
+      <aside className="auth-aside">
+        <Logo />
+        <div>
+          <h2>Contracts signed on a server you own.</h2>
+          <ul>{POINTS.map((p) => <li key={p}><Check size={18} aria-hidden="true" />{p}</li>)}</ul>
+        </div>
+        <small>Open source under AGPL-3.0</small>
+      </aside>
+      <main className="auth-main">
+        <div className="auth-card">
+          <div className="auth-mobile-logo"><Logo /></div>
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
+
 // invite: { token, email, teamName } when signing up from a team invite; the email is fixed to the invited address.
 export default function AuthForm({ mode, closed, noPassword, invite, sso }) {
   const router = useRouter();
@@ -49,19 +70,8 @@ export default function AuthForm({ mode, closed, noPassword, invite, sso }) {
   }
 
   return (
-    <div className="auth">
-      <Head><title>{isSignup ? 'Create account · Countersign' : 'Sign in · Countersign'}</title></Head>
-      <aside className="auth-aside">
-        <Logo />
-        <div>
-          <h2>Contracts signed on a server you own.</h2>
-          <ul>{POINTS.map((p) => <li key={p}><Check size={18} aria-hidden="true" />{p}</li>)}</ul>
-        </div>
-        <small>Open source under AGPL-3.0</small>
-      </aside>
-      <main className="auth-main">
-        <div className="auth-card">
-          <div className="auth-mobile-logo"><Logo /></div>
+    <AuthShell>
+          <Head><title>{isSignup ? 'Create account · Countersign' : 'Sign in · Countersign'}</title></Head>
           <h1>{isSignup ? 'Create your account' : 'Welcome back'}</h1>
           <p className="auth-sub">{invite ? `You will join ${invite.teamName} when your account is created.` : isSignup ? 'Start sending documents for signature in minutes.' : 'Sign in to send and manage documents.'}</p>
           {sso?.error && <div className="error-summary" role="alert">{sso.error}</div>}
@@ -88,8 +98,7 @@ export default function AuthForm({ mode, closed, noPassword, invite, sso }) {
           <p className="auth-switch">
             {isSignup ? <>Already have an account? <Link href={invite ? `/login?email=${encodeURIComponent(invite.email)}&next=${encodeURIComponent(`/join/${invite.token}`)}` : '/login'}>Sign in</Link></> : <>New here? <Link href="/signup">Create an account</Link></>}
           </p>
-        </div>
-      </main>
-    </div>
+          {!isSignup && <p className="auth-switch"><Link href="/forgot">Forgot your password?</Link></p>}
+    </AuthShell>
   );
 }
