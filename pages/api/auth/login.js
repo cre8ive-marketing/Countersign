@@ -2,6 +2,7 @@ import { api, clientInfo, fail, str } from '../../../lib/http';
 import { loginDelayMs, loginLockedFor, recordLoginFailure, recordLoginSuccess, startSession, verifyLogin } from '../../../lib/auth';
 import { logSecurity } from '../../../lib/security-log';
 import { logId } from '../../../lib/crypto';
+import { hasIdentity, oidcName, oidcRequired } from '../../../lib/oidc';
 import db from '../../../lib/db';
 
 export default api({
@@ -27,7 +28,12 @@ export default api({
       if (locked) logSecurity('login_locked', { ...info, ...who, detail: `${who.detail ? who.detail + '; ' : ''}limit reached` });
       fail(401, 'Email or password is incorrect');
     }
-    recordLoginSuccess(email, info.ip);
+    recordLoginSuccess(email, info.ip); // a correct password is not a failed guess, even if refused below
+    // After the password check, so only someone who knows the password learns this.
+    if (oidcRequired() && hasIdentity(user.id)) {
+      logSecurity('login_failure', { ...info, ...who, detail: 'password sign-in is off for this account' });
+      fail(403, `This account signs in with ${oidcName()}.`);
+    }
     startSession(res, user.id, info);
     logSecurity('login_success', { ...info, ...who });
     res.json({ ok: true });

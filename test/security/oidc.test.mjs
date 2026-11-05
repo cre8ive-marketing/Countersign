@@ -78,8 +78,8 @@ async function begin(b, next) {
   assert.equal(r.status, 302);
   return new URL(r.headers.get('location')).searchParams;
 }
-async function signIn(claims, { next, tokenStatus, b = browser() } = {}) {
-  const auth = await begin(b, next);
+async function signIn(claims, { next, tokenStatus, b = browser(), connect } = {}) {
+  const auth = connect ? new URL((await (await b.json('/api/auth/oidc/connect', 'POST', {})).json()).url).searchParams : await begin(b, next);
   const code = rnd();
   codes.set(code, { claims, tokenStatus, challenge: auth.get('code_challenge'), nonce: auth.get('nonce') });
   const r = await b.request(`/api/auth/oidc/callback?code=${code}&state=${encodeURIComponent(auth.get('state'))}`);
@@ -171,7 +171,8 @@ test('SSO-1: an email match alone never opens an existing account; only that acc
   const session = other.jar.cs_session;
   assert.equal((await signIn({ sub, email }, { b: other })).to, '/app/settings?sso=failed', 'another account\'s session does not count');
   assert.equal(other.jar.cs_session, session);
-  assert.equal((await signIn({ sub, email }, { b: owner })).to, '/app');
+  assert.equal((await signIn({ sub, email }, { b: owner })).to, '/app/settings?sso=failed', 'a flow any site can start does not link');
+  assert.equal((await signIn({ sub, email }, { b: owner, connect: true })).to, '/app/settings');
   assert.equal((await signIn({ sub, email })).to, '/app', 'connected: SSO alone works now');
 });
 
@@ -196,7 +197,7 @@ test('SSO-8: an account created or linked by SSO leaves its own security event',
   const created = newEmail();
   await signIn({ sub: newSub(), email: created });
   const linked = newEmail();
-  await signIn({ sub: newSub(), email: linked }, { b: await signUp(linked) });
+  await signIn({ sub: newSub(), email: linked }, { b: await signUp(linked), connect: true });
   const db = new DatabaseSync(path.join(DATA_DIR, 'countersign.db'), { readOnly: true });
   const types = (email) => db.prepare('SELECT type FROM security_events WHERE email = ?').all(email).map((e) => e.type);
   const [a, b] = [types(created), types(linked)];

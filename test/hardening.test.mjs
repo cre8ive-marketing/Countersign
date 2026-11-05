@@ -91,6 +91,29 @@ test('sign out everywhere: keys survive by default; { apiKeys: true } revokes th
   assert.equal((await list(bearer(k1))).status, 200, 'another user\'s key is untouched');
 });
 
+test('webhooks pause on a password change and on sign-out with keys; a plain sign-out leaves them', async () => {
+  const email = `hd-${Date.now()}-${rnd()}@example.com`;
+  const password = 'correct horse battery';
+  const a = client();
+  assert.equal((await a('/api/auth/signup', { body: { name: 'Hooks', email, password } })).status, 200);
+  const made = await a('/api/webhooks', { body: { url: 'https://example.com/hook', events: ['document.sent'] } });
+  const id = made.data.id ?? made.data.webhook?.id;
+  const active = async (c) => { const d = (await c('/api/webhooks', { method: 'GET' })).data; return (d.webhooks ?? d)[0].active; };
+  const on = (c) => c(`/api/webhooks/${id}`, { method: 'PUT', body: { active: true } });
+  const relogin = async () => { const c = client(); assert.equal((await c('/api/auth/login', { body: { email, password } })).status, 200); return c; };
+  assert.ok(await active(a));
+  await a('/api/auth/logout-all', { body: {} });
+  const b = await relogin();
+  assert.ok(await active(b), 'plain sign-out');
+  await b('/api/auth/logout-all', { body: { apiKeys: true } });
+  const c = await relogin();
+  assert.ok(!(await active(c)), 'sign-out with keys');
+  assert.equal((await on(c)).status, 200);
+  assert.ok(await active(c), 'can be turned back on');
+  assert.equal((await c('/api/account', { method: 'PATCH', body: { currentPassword: password, newPassword: 'a different long passphrase' } })).status, 200);
+  assert.ok(!(await active(c)), 'password change');
+});
+
 test('webhook secret rotation: owner only, session only, returns a new whsec_ secret', async () => {
   const u = await signup();
   const made = await u('/api/webhooks', { body: { url: 'https://example.com/hook', events: ['document.sent'] } });

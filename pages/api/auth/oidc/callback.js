@@ -1,7 +1,7 @@
 import { api, clientInfo, fail } from '../../../../lib/http';
-import { getUser, startSession } from '../../../../lib/auth';
+import { endThisSession, getUser, revokeOtherSessions, startSession } from '../../../../lib/auth';
 import { logSecurity } from '../../../../lib/security-log';
-import { finishLogin, FLOW_COOKIE, oidcEnabled } from '../../../../lib/oidc';
+import { finishLogin, FLOW_COOKIE, oidcEnabled, oidcRequired } from '../../../../lib/oidc';
 
 export default api({
   async GET(req, res) {
@@ -15,6 +15,10 @@ export default api({
     let target;
     try {
       const { userId, email, next, created, linked } = await finishLogin(req.query, cookie, info.ip, sessionUserId);
+      // Connecting under OIDC_REQUIRED ends password access, so sessions opened with the password end too.
+      if (linked && oidcRequired()) revokeOtherSessions(req, userId);
+      // The new cookie replaces this browser's old one, which nothing could sign out afterwards.
+      if (sessionUserId) endThisSession(req);
       startSession(res, userId, info);
       if (created) logSecurity('signup', { ...info, userId, email, detail: 'via sso' });
       if (linked) logSecurity('sso_linked', { ...info, userId, email });
@@ -22,7 +26,7 @@ export default api({
       target = next;
     } catch (e) {
       if (!e.status) console.error('SSO callback failed:', e.message);
-      if (e.status !== 429) logSecurity('login_failure', { ...info, detail: e.status ? e.message : 'SSO: provider request failed' });
+      if (e.status !== 429 && !e.quiet) logSecurity('login_failure', { ...info, detail: e.status ? e.message : 'SSO: provider request failed' });
       // The login page sends a signed-in person away, so a failed Connect reports in Settings.
       if (sessionUserId) target = '/app/settings?sso=failed';
       else target = { 403: '/login?error=sso_denied', 409: '/login?error=sso_link' }[e.status] ?? '/login?error=sso';

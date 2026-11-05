@@ -22,7 +22,7 @@ export function safeNext(next) {
 const waitText = (s) => (s < 60 ? `${s} seconds` : `${Math.ceil(s / 60)} minute${Math.ceil(s / 60) === 1 ? '' : 's'}`);
 
 // invite: { token, email, teamName } when signing up from a team invite; the email is fixed to the invited address.
-export default function AuthForm({ mode, closed, invite, sso }) {
+export default function AuthForm({ mode, closed, noPassword, invite, sso }) {
   const router = useRouter();
   // ?email= comes from the landing page start form.
   const [form, setForm] = useState(() => ({ name: '', email: invite?.email ?? (typeof router.query.email === 'string' ? router.query.email.slice(0, 254) : ''), password: '' }));
@@ -69,12 +69,12 @@ export default function AuthForm({ mode, closed, invite, sso }) {
             <>
               {/* A plain link: this is a full-page redirect to the provider. */}
               <a className="btn btn-secondary btn-block" href={sso.href}>Continue with {sso.name}</a>
-              <p className="auth-or"><span>or</span></p>
+              {!noPassword && !closed && <p className="auth-or"><span>or</span></p>}
             </>
           )}
           {closed ? (
             <p className="banner banner-bad">Sign-ups are closed on this server. Ask the person who runs it to create an account for you, or to set ALLOW_SIGNUP=true.</p>
-          ) : (
+          ) : !noPassword && (
             <form onSubmit={submit}>
               {error && <div ref={summary} className="error-summary" role="alert" tabIndex={-1}>{error}</div>}
               {isSignup && <TextField id="name" label="Full name" autoComplete="name" value={form.name} onChange={set('name')} required maxLength={120} />}

@@ -3,6 +3,7 @@ import {
   clearPasswordCheckFailures, hashPassword, passwordCheckLockedFor, passwordProblem, recordPasswordCheckFailure, revokeOtherSessions, verifyPassword,
 } from '../../lib/auth';
 import { revokeAllKeys } from '../../lib/apikeys';
+import { pauseAllWebhooks } from '../../lib/webhooks';
 import { logSecurity } from '../../lib/security-log';
 import db from '../../lib/db';
 
@@ -31,6 +32,7 @@ export default api({
       db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(newPassword), user.id);
       const revoked = revokeOtherSessions(req, user.id);
       const keys = revokeAllKeys(user, info);
+      pauseAllWebhooks(user, info);
       logSecurity('password_change', { ...info, userId: user.id, email: user.email, detail: `${revoked} other sessions and ${keys} API keys revoked` });
     }
     res.json({ ok: true });

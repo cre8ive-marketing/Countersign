@@ -3,6 +3,7 @@ import { createUser, hashPassword, passwordProblem, signupOpen, signupThrottle, 
 import { logSecurity } from '../../../lib/security-log';
 import db, { tx } from '../../../lib/db';
 import { inviteByToken, joinWithInvite } from '../../../lib/teams';
+import { oidcName, passwordSignupOff } from '../../../lib/oidc';
 
 export default api({
   async POST(req, res) {
@@ -13,6 +14,8 @@ export default api({
       res.setHeader('Retry-After', String(wait));
       fail(429, 'Too many sign-up attempts. Try again later.');
     }
+    const noPassword = () => passwordSignupOff() && fail(403, `This server creates accounts through ${oidcName()}.`);
+    noPassword();
     const email = str(req.body?.email, 254).toLowerCase();
     // A valid team invite for this exact email opens sign-up even when it is closed, and is accepted in the same request.
     const inviteToken = req.body?.inviteToken;
@@ -29,6 +32,7 @@ export default api({
     const passwordHash = await hashPassword(password); // scrypt outside the write lock
     const userId = tx(() => {
       // Re-checked under the lock: closed sign-up only admits invites to a team owned by the first account.
+      noPassword();
       const open = signupOpen();
       if (!open && !viaInvite) fail(403, 'Sign-ups are closed on this server. Ask the admin for an account.');
       if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) fail(409, 'An account with this email already exists');

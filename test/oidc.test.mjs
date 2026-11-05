@@ -4,7 +4,8 @@
 //   OIDC_ALLOWED_DOMAINS=allowed.test OIDC_AUTO_CREATE=true ALLOW_SIGNUP=false APP_URL=<BASE_URL>
 // Test env: OIDC_BASE_URL=<BASE_URL> OIDC_MOCK_PORT=<P>. Without them the provider tests skip.
 // The last test runs against BASE_URL, a server without OIDC settings. Optional OIDC_NODOMAIN_BASE_URL: a fresh server
-// on the same mock with no OIDC_ALLOWED_DOMAINS and no users.
+// on the same mock with no OIDC_ALLOWED_DOMAINS and no users. Optional OIDC_REQUIRED_BASE_URL: a fresh open server on the
+// same mock with OIDC_ALLOWED_DOMAINS=allowed.test and OIDC_REQUIRED=true.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -53,9 +54,9 @@ test.after(() => mock?.close());
 // --- A browser: a cookie jar that follows nothing by itself.
 function browser(base = BASE) {
   const jar = {};
-  const go = async (p) => {
+  const go = async (p, init = {}) => {
     const cookie = Object.entries(jar).map(([k, v]) => `${k}=${v}`).join('; ');
-    const res = await fetch(base + p, { redirect: 'manual', headers: cookie ? { cookie } : {} });
+    const res = await fetch(base + p, { redirect: 'manual', ...init, headers: { ...(cookie ? { cookie } : {}), ...init.headers } });
     for (const c of res.headers.getSetCookie()) {
       const [kv] = c.split(';');
       const i = kv.indexOf('=');
@@ -70,9 +71,11 @@ const start = async (b, next) => {
   assert.equal(r.status, 302);
   return new URL(r.headers.get('location'));
 };
-// One full sign-in. opts: next, tokenStatus, state and nonce overrides, and an existing browser.
-async function signIn(claims, { next, tokenStatus, state, nonce, b = browser() } = {}) {
-  const auth = await start(b, next);
+// One full sign-in. opts: next, tokenStatus, state and nonce overrides, an existing browser, and connect (Settings' POST route).
+async function signIn(claims, { next, tokenStatus, state, nonce, b = browser(), connect } = {}) {
+  const auth = connect
+    ? new URL((await (await b.go('/api/auth/oidc/connect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json()).url)
+    : await start(b, next);
   const code = rnd();
   codes.set(code, { claims, tokenStatus, challenge: auth.searchParams.get('code_challenge'), nonce: nonce ?? auth.searchParams.get('nonce') });
   const r = await b.go(`/api/auth/oidc/callback?code=${code}&state=${encodeURIComponent(state ?? auth.searchParams.get('state'))}`);
@@ -143,8 +146,9 @@ test('existing password account: SSO alone is refused; its live session connects
   const b = browser();
   const [name, value] = login.headers.getSetCookie()[0].split(';')[0].split('=');
   b.jar[name] = value;
-  assert.ok((await (await b.go('/app/settings')).text()).includes('/api/auth/oidc/start?next=%2Fapp%2Fsettings'), 'Settings offers Connect');
-  assert.equal((await signIn({ sub, email: first.email.toUpperCase(), name: 'Other Name' }, { b, next: '/app/settings' })).to, '/app/settings');
+  assert.ok((await (await b.go('/app/settings')).text()).includes('Connect this account to'), 'Settings offers Connect');
+  assert.equal((await signIn({ sub, email: first.email }, { b })).to, '/app/settings?sso=failed', 'a plain GET flow, which any site can start, does not link');
+  assert.equal((await signIn({ sub, email: first.email.toUpperCase(), name: 'Other Name' }, { b, connect: true })).to, '/app/settings');
   assert.ok((await (await b.go('/app/settings')).text()).includes('is connected to'), 'Settings shows it connected');
   const later = await signIn({ sub, email: first.email });
   assert.equal(later.to, '/app', 'connected: SSO alone works now');
@@ -234,6 +238,34 @@ test('a callback with no flow cookie makes no provider request', { skip: NEEDS }
   const before = seen.length;
   assert.equal((await browser().go('/api/auth/oidc/callback?code=x&state=y')).headers.get('location'), FAILED);
   assert.equal(seen.length, before);
+});
+
+test('OIDC_REQUIRED: first account by password; then no password sign-up; a connected account has no password sign-in', { skip: NEEDS || (!process.env.OIDC_REQUIRED_BASE_URL && 'needs OIDC_REQUIRED_BASE_URL') }, async () => {
+  const R = process.env.OIDC_REQUIRED_BASE_URL;
+  const post = (p, body) => fetch(R + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const account = { email: newEmail(), password: 'correct horse battery' };
+  assert.equal((await post('/api/auth/signup', { name: 'First', ...account })).status, 200, 'the first account may use a password');
+  const refused = await post('/api/auth/signup', { name: 'Second', email: newEmail(), password: account.password });
+  assert.equal(refused.status, 403);
+  assert.match((await refused.json()).error, /creates accounts through/);
+  const signupPage = await (await fetch(`${R}/signup`)).text();
+  assert.ok(signupPage.includes('Continue with') && !signupPage.includes('id="password"'), 'SSO only on the sign-up page');
+  assert.ok((await (await fetch(`${R}/login`)).text()).includes('id="password"'), 'accounts not yet connected still need the form');
+  const login = await post('/api/auth/login', account);
+  assert.equal(login.status, 200, 'not connected yet: password works');
+  const b = browser(R);
+  const [name, value] = login.headers.getSetCookie()[0].split(';')[0].split('=');
+  b.jar[name] = value;
+  assert.ok((await (await b.go('/app/settings')).text()).includes('your password no longer signs you in'), 'Settings warns first');
+  const sub = newSub();
+  assert.equal((await signIn({ sub, email: account.email }, { b, connect: true })).to, '/app/settings');
+  assert.equal((await post('/api/auth/oidc/connect', {})).status, 401, 'connect needs a session');
+  const after = await post('/api/auth/login', account);
+  assert.equal(after.status, 403);
+  assert.match((await after.json()).error, /signs in with/);
+  assert.equal((await post('/api/auth/login', { ...account, password: 'wrong password here' })).status, 401, 'a wrong password learns nothing');
+  assert.equal((await signIn({ sub, email: account.email }, { b: browser(R) })).to, '/app');
+  assert.equal((await signIn({ sub: newSub(), email: newEmail() }, { b: browser(R) })).to, '/app', 'new people come through SSO');
 });
 
 test('without OIDC settings the routes are 404 and the login page has no button', { skip: !process.env.BASE_URL && 'needs BASE_URL' }, async () => {

@@ -15,6 +15,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { PDFDocument } from 'pdf-lib';
 
@@ -566,6 +568,43 @@ test('bulk send: a failing row does not stop the others; failed lists it, create
 // =====================================================================================================================
 // Public template link
 // =====================================================================================================================
+
+// Runs the hourly job's expiry and cleanup in a child process on the server's DATA_DIR; see runExpiryJob in tier1.test.mjs.
+function runCleanupJob() {
+  const ROOT = path.resolve(import.meta.dirname, '..');
+  const code = `
+    import { registerHooks } from 'node:module';
+    registerHooks({ resolve(s, c, next) {
+      try { return next(s, c); } catch (e) { if (/^\\.\\.?\\//.test(s) && !/\\.[cm]?js$/.test(s)) return next(s + '.js', c); throw e; }
+    } });
+    const d = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'lib', 'documents.js')).href)});
+    await d.expireDueDocuments();
+    d.deleteExpiredPublicCopies();`;
+  execFileSync(process.execPath, ['--input-type=module', '-e', code], { cwd: ROOT, encoding: 'utf8', timeout: 60_000,
+    env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, DATA_DIR: DATA, ENCRYPTION_KEY: keyText(), NODE_NO_WARNINGS: '1' } });
+}
+
+test('public link cleanup: expired copies nobody signed are deleted with a tombstone; signed copies and ordinary documents stay', { skip: (NEEDS_DB || typeof (await import('node:module')).registerHooks !== 'function') && 'needs DATA_DIR and Node with module.registerHooks' }, async () => {
+  const owner = await signup();
+  const tpl = await template(owner, ['Signer']);
+  const token = (await owner(`/api/documents/${tpl.id}/public`, { body: { enabled: true } })).data.url.slice(3);
+  const copy = async () => {
+    const before = new Set((await owner('/api/documents?template=0', { method: 'GET' })).data.documents.map((d) => d.id));
+    assert.equal((await pub(token, { name: 'V', email: `v-${rnd()}@example.com`, website: '' })).status, 200);
+    return (await owner('/api/documents?template=0', { method: 'GET' })).data.documents.find((d) => !before.has(d.id)).id;
+  };
+  const [abandoned, signed] = [await copy(), await copy()];
+  const ordinary = (await sent(owner, [{ id: 'r0', name: 'A', email: `a-${rnd()}@example.com`, role: 'signer' }])).id;
+  db().prepare("UPDATE recipients SET status = 'signed' WHERE document_id = ?").run(signed);
+  const past = new Date(Date.now() - 5000).toISOString();
+  for (const id of [abandoned, signed, ordinary]) db().prepare('UPDATE documents SET expires_at = ? WHERE id = ?').run(past, id);
+  runCleanupJob();
+  const status = (id) => db().prepare('SELECT status FROM documents WHERE id = ?').get(id)?.status;
+  assert.deepEqual([status(abandoned), status(signed), status(ordinary)], [undefined, 'expired', 'expired']);
+  assert.equal(db().prepare('SELECT deleted_by FROM audit_tombstones WHERE document_id = ?').get(abandoned).deleted_by, 'system');
+  assert.ok(!fs.existsSync(path.join(DATA, 'files', `${abandoned}.original.pdf`)), 'file gone');
+  assert.equal((await owner(`/api/documents/${tpl.id}`, { method: 'GET' })).status, 200, 'the template stays');
+});
 
 test('public link: enable, /t page, submit -> signUrl -> sign to completion; copy owned by the template owner', async () => {
   const owner = await signup('Pat Owner');
